@@ -4,8 +4,7 @@
 #ifndef DEF_TJPGDEC
 #define DEF_TJPGDEC
 
-//#include "tjpgdcnf.h"
-#include "arm_tjpgd_cfg.h"
+#include "tjpgdcnf.h"
 #include <string.h>
 
 #ifdef __cplusplus
@@ -32,7 +31,7 @@ typedef uint8_t jd_yuv_t;
 /* Error code */
 typedef enum {
 	JDR_OK = 0,	/* 0: Succeeded */
-	JDR_INTR,	/* 1: Interrupted by output function */	
+	JDR_INTR,	/* 1: Interrupted by output function */
 	JDR_INP,	/* 2: Device error or wrong termination of input stream */
 	JDR_MEM1,	/* 3: Insufficient memory pool for the image */
 	JDR_MEM2,	/* 4: Insufficient stream input buffer */
