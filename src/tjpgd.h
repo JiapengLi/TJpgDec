@@ -11,13 +11,15 @@
 extern "C" {
 #endif
 
-#if defined(_WIN32)	/* VC++ or some compiler without stdint.h */
-typedef unsigned char	uint8_t;
-typedef unsigned short	uint16_t;
-typedef short			int16_t;
-typedef unsigned long	uint32_t;
-typedef long			int32_t;
-#else				/* Embedded platform */
+#if defined(__GNUC__)  // GCC or compatible compiler
+    #include <stdint.h>
+#elif defined(_WIN32)
+    typedef unsigned char   uint8_t;
+    typedef unsigned short  uint16_t;
+    typedef short           int16_t;
+    typedef unsigned long   uint32_t;
+    typedef long            int32_t;
+#else
 #include <stdint.h>
 #endif
 

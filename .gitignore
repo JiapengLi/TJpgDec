@@ -1,1 +1,4 @@
-tjpgd3.zip
+*.zip
+*.o
+*.exe
+*.jpg

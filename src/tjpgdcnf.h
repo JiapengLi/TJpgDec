@@ -4,7 +4,7 @@
 
 /* Specifies size of stream input buffer */
 #ifndef JD_SZBUF
-#   define JD_SZBUF                     128
+#   define JD_SZBUF                     256
 #endif
 
 /* Specifies color depth
@@ -70,3 +70,6 @@
 #ifndef JD_SWAP_RED_AND_BLUE
 #   define JD_SWAP_RED_AND_BLUE         0
 #endif
+
+#include <stdio.h>
+#define JD_LOG(x...)                    do {printf(x); printf("\n");} while(0)

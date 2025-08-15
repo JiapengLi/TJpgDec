@@ -22,7 +22,7 @@
 / Jun 11, 2021 R0.02a Some performance improvement.
 / Jul 01, 2021 R0.03  Added JD_FASTDECODE option.
 /                     Some performance improvement.
-/ Mar 10, 2025 R0.03r Added JD_USE_INTERNAL_32BIT_PIXEL option to support ARGB8888. 
+/ Mar 10, 2025 R0.03r Added JD_USE_INTERNAL_32BIT_PIXEL option to support ARGB8888.
 /					  Added JD_SWAP_RED_AND_BLUE option.
 /----------------------------------------------------------------------------*/
 
@@ -885,7 +885,7 @@ JRESULT mcu_output (
 		#else
 			a = (mx - w) * (JD_FORMAT != 2 ? 3 : 1);	/* Bytes to skip for next line in the square */
 		#endif
-			
+
 			op = (uint8_t*)jd->workbuf;
 			for (iy = 0; iy < my; iy += w) {
 				for (ix = 0; ix < mx; ix += w) {
@@ -1035,7 +1035,7 @@ JRESULT mcu_output (
 	}
 
 	/* Output the rectangular */
-	return outfunc(jd, jd->workbuf, &rect) ? JDR_OK : JDR_INTR; 
+	return outfunc(jd, jd->workbuf, &rect) ? JDR_OK : JDR_INTR;
 }
 
 
@@ -1088,9 +1088,15 @@ JRESULT jd_prepare (
 		len -= 2;			/* Segent content size */
 		ofs += 4 + len;		/* Number of bytes loaded */
 
+		if (len > JD_SZBUF) {
+			JD_LOG("Insufficient buffer size %lld > %d", len, JD_SZBUF);
+		}
+
 		switch (marker & 0xFF) {
 		case 0xC0:	/* SOF0 (baseline JPEG) */
-			if (len > JD_SZBUF) return JDR_MEM2;
+			if (len > JD_SZBUF) {
+				return JDR_MEM2;
+			}
 			if (jd->infunc(jd, seg, len) != len) return JDR_INP;	/* Load segment data */
 
 			jd->width = LDB_WORD(&seg[3]);		/* Image width in unit of pixel */
