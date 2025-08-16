@@ -82,3 +82,12 @@
 
 #include <stdio.h>
 #define JD_LOG(x...)                    do {printf(x); printf("\n");} while(0)
+#define JD_HEXDUMP(s, x, y)             do { \
+    printf("%s:\n", s); \
+    for (int i = 0; i < y; i++) { \
+        if (i && i % 16 == 0) printf("\n"); \
+        printf("%02X ", ((uint8_t*)x)[i]); \
+    } \
+    printf("\n"); \
+} while(0)
+

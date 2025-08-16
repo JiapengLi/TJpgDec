@@ -216,7 +216,7 @@ static JRESULT create_huffman_tbl(  /* 0:OK, !0:Failed */
     uint8_t d, *pb, *pd;
     uint16_t hc, *ph;
 
-
+    /* header(1) | bits counter map (16) |  */
     while (ndata) { /* Process all tables in the segment */
         if (ndata < 17) {
             return JDR_FMT1;    /* Err: wrong data size */
@@ -259,13 +259,40 @@ static JRESULT create_huffman_tbl(  /* 0:OK, !0:Failed */
             return JDR_MEM1;    /* Err: not enough memory */
         }
         jd->huffdata[num][cls] = pd;
-        for (i = 0; i < np; i++) {          /* Load decoded data corresponds to each code word */
-            d = *data++;
-            if (!cls && d > 11) {
-                return JDR_FMT1;
+        if (cls == 0) {
+            for (i = 0; i < np; i++) {          /* Load decoded data corresponds to each code word */
+                d = *data++;
+                if (d > 11) {
+                    return JDR_FMT1;
+                }
+                pd[i] = d;
             }
-            pd[i] = d;
+        } else {
+            for (i = 0; i < np; i++) {          /* Load decoded data corresponds to each code word */
+                d = *data++;
+                pd[i] = d;
+            }
         }
+
+        JD_LOG("=== Creating Huffman Table ===");
+        JD_LOG("Class: %s, Table Number: %d", cls ? "AC" : "DC", num);
+
+        JD_LOG("Bit Length Distribution (1-16 bits):");
+        for (i = 0; i < 16; i++) {
+            JD_LOG("  Length %2d: %2d codes", i + 1, pb[i]);
+        }
+
+        JD_LOG("Generated Huffman Codes:");
+        for (i = 0; i < np; i++) {
+            JD_LOG("  Code[%2zu] = 0x%X", i, ph[i]);
+        }
+
+        JD_LOG("Symbol values for each code:");
+        for (i = 0; i < np; i++) {
+            JD_LOG("  Symbol[%2zu] = 0x%02X", i, pd[i]);
+        }
+
+
 #if JD_FASTDECODE == 2
         {
             /* Create fast huffman decode table */
@@ -1193,127 +1220,146 @@ JRESULT jd_prepare(
     } while (marker != 0xFFD8);
 
     for (;;) {              /* Parse JPEG segments */
+        JD_LOG("\n---");
+
         /* Get a JPEG marker */
         if (jd->infunc(jd, seg, 4) != 4) {
             return JDR_INP;
         }
+
         marker = LDB_WORD(seg);     /* Marker */
+        if ((marker >> 8) != 0xFF) {
+            return JDR_FMT1;
+        }
+        marker = marker & 0xFF;
+
         len = LDB_WORD(seg + 2);    /* Length field */
-        if (len <= 2 || (marker >> 8) != 0xFF) {
+        if (len <= 2) {
             return JDR_FMT1;
         }
         len -= 2;           /* Segent content size */
         ofs += 4 + len;     /* Number of bytes loaded */
 
-        if (len > JD_SZBUF) {
-            JD_LOG("Insufficient buffer size %lld > %d", len, JD_SZBUF);
-            return JDR_MEM2;
-        }
-
-        if (jd->infunc(jd, seg, len) != len) {
-            return JDR_INP;
-        }
-
-        switch (marker & 0xFF) {
+        switch (marker) {
         case 0xC0:  /* SOF0 (baseline JPEG) */
-            jd->width = LDB_WORD(&seg[3]);      /* Image width in unit of pixel */
-            jd->height = LDB_WORD(&seg[1]);     /* Image height in unit of pixel */
-            jd->ncomp = seg[5];                 /* Number of color components */
-            if (jd->ncomp != 3 && jd->ncomp != 1) {
-                return JDR_FMT3;    /* Err: Supports only Grayscale and Y/Cb/Cr */
+        case 0xDD:
+        case 0xC4:
+        case 0xDB:
+        case 0xDA:
+            if (len > JD_SZBUF) {
+                JD_LOG("Insufficient buffer size %lld > %d", len, JD_SZBUF);
+                return JDR_MEM2;
+            }
+            if (jd->infunc(jd, seg, len) != len) {
+                return JDR_INP;
             }
 
-            /* Check each image component */
-            for (i = 0; i < jd->ncomp; i++) {
-                b = seg[7 + 3 * i];                         /* Get sampling factor */
-                if (i == 0) {   /* Y component */
-                    if (b != 0x11 && b != 0x22 && b != 0x21) {  /* Check sampling factor */
-                        return JDR_FMT3;                    /* Err: Supports only 4:4:4, 4:2:0 or 4:2:2 */
+            JD_LOG("Process segment marker %02X,%lld", marker, len);
+            JD_HEXDUMP("Segment data", seg, len);
+            switch (marker) {
+            case 0xC0:  /* SOF0 (baseline JPEG) */
+                jd->width = LDB_WORD(&seg[3]);      /* Image width in unit of pixel */
+                jd->height = LDB_WORD(&seg[1]);     /* Image height in unit of pixel */
+                jd->ncomp = seg[5];                 /* Number of color components */
+                if (jd->ncomp != 3 && jd->ncomp != 1) {
+                    return JDR_FMT3;    /* Err: Supports only Grayscale and Y/Cb/Cr */
+                }
+
+                /* Check each image component */
+                for (i = 0; i < jd->ncomp; i++) {
+                    b = seg[7 + 3 * i];                         /* Get sampling factor */
+                    if (i == 0) {   /* Y component */
+                        if (b != 0x11 && b != 0x22 && b != 0x21) {  /* Check sampling factor */
+                            return JDR_FMT3;                    /* Err: Supports only 4:4:4, 4:2:0 or 4:2:2 */
+                        }
+                        jd->msx = b >> 4;
+                        jd->msy = b & 15;     /* Size of MCU [blocks] */
+                    } else {        /* Cb/Cr component */
+                        if (b != 0x11) {
+                            return JDR_FMT3;    /* Err: Sampling factor of Cb/Cr must be 1 */
+                        }
                     }
-                    jd->msx = b >> 4;
-                    jd->msy = b & 15;     /* Size of MCU [blocks] */
-                } else {        /* Cb/Cr component */
-                    if (b != 0x11) {
-                        return JDR_FMT3;    /* Err: Sampling factor of Cb/Cr must be 1 */
+                    jd->qtid[i] = seg[8 + 3 * i];               /* Get dequantizer table ID for this component */
+                    if (jd->qtid[i] > 3) {
+                        return JDR_FMT3;    /* Err: Invalid ID */
                     }
                 }
-                jd->qtid[i] = seg[8 + 3 * i];               /* Get dequantizer table ID for this component */
-                if (jd->qtid[i] > 3) {
-                    return JDR_FMT3;    /* Err: Invalid ID */
+
+                JD_LOG("w: %u, h: %u, ncomp: %u, msx: %u, msy: %u", jd->width, jd->height, jd->ncomp, jd->msx, jd->msy);
+                JD_HEXDUMP("qtid:", jd->qtid, jd->ncomp);
+                break;
+
+            case 0xDD:  /* DRI - Define Restart Interval */
+                jd->nrst = LDB_WORD(seg);   /* Get restart interval (MCUs) */
+                break;
+
+            case 0xC4:  /* DHT - Define Huffman Tables */
+                rc = create_huffman_tbl(jd, seg, len);  /* Create huffman tables */
+                if (rc) {
+                    return rc;
                 }
+                break;
+
+            case 0xDB:  /* DQT - Define Quaitizer Tables */
+                rc = create_qt_tbl(jd, seg, len);   /* Create de-quantizer tables */
+                if (rc) {
+                    return rc;
+                }
+                break;
+
+            case 0xDA:  /* SOS - Start of Scan */
+                if (!jd->width || !jd->height) {
+                    return JDR_FMT1;    /* Err: Invalid image size */
+                }
+                if (seg[0] != jd->ncomp) {
+                    return JDR_FMT3;    /* Err: Wrong color components */
+                }
+
+                /* Check if all tables corresponding to each components have been loaded */
+                for (i = 0; i < jd->ncomp; i++) {
+                    b = seg[2 + 2 * i]; /* Get huffman table ID */
+                    if (b != 0x00 && b != 0x11) {
+                        return JDR_FMT3;    /* Err: Different table number for DC/AC element */
+                    }
+                    n = i ? 1 : 0;                          /* Component class */
+                    if (!jd->huffbits[n][0] || !jd->huffbits[n][1]) {   /* Check huffman table for this component */
+                        return JDR_FMT1;                    /* Err: Nnot loaded */
+                    }
+                    if (!jd->qttbl[jd->qtid[i]]) {          /* Check dequantizer table for this component */
+                        return JDR_FMT1;                    /* Err: Not loaded */
+                    }
+                }
+
+                /* Allocate working buffer for MCU and pixel output */
+                n = jd->msy * jd->msx;                      /* Number of Y blocks in the MCU */
+                if (!n) {
+                    return JDR_FMT1;    /* Err: SOF0 has not been loaded */
+                }
+                len = n * 64 * 2 + 64;                      /* Allocate buffer for IDCT and RGB output */
+                if (len < 256) {
+                    len = 256;    /* but at least 256 byte is required for IDCT */
+                }
+                if (len < n * 64 * 4) {
+                    len = n * 64 * 4;    /* support ARGB8888 */
+                }
+                jd->workbuf = alloc_pool(jd, len);          /* and it may occupy a part of following MCU working buffer for RGB output */
+                if (!jd->workbuf) {
+                    return JDR_MEM1;    /* Err: not enough memory */
+                }
+                jd->mcubuf = alloc_pool(jd, (n + 2) * 64 * sizeof(jd_yuv_t));   /* Allocate MCU working buffer */
+                if (!jd->mcubuf) {
+                    return JDR_MEM1;    /* Err: not enough memory */
+                }
+
+                /* Align stream read offset to JD_SZBUF */
+                if (ofs %= JD_SZBUF) {
+                    jd->dctr = jd->infunc(jd, seg + ofs, (size_t)(JD_SZBUF - ofs));
+                }
+                jd->dptr = seg + ofs - (JD_FASTDECODE ? 0 : 1);
+
+                return JDR_OK;      /* Initialization succeeded. Ready to decompress the JPEG image. */
             }
             break;
-
-        case 0xDD:  /* DRI - Define Restart Interval */
-            jd->nrst = LDB_WORD(seg);   /* Get restart interval (MCUs) */
-            break;
-
-        case 0xC4:  /* DHT - Define Huffman Tables */
-            rc = create_huffman_tbl(jd, seg, len);  /* Create huffman tables */
-            if (rc) {
-                return rc;
-            }
-            break;
-
-        case 0xDB:  /* DQT - Define Quaitizer Tables */
-            rc = create_qt_tbl(jd, seg, len);   /* Create de-quantizer tables */
-            if (rc) {
-                return rc;
-            }
-            break;
-
-        case 0xDA:  /* SOS - Start of Scan */
-            if (!jd->width || !jd->height) {
-                return JDR_FMT1;    /* Err: Invalid image size */
-            }
-            if (seg[0] != jd->ncomp) {
-                return JDR_FMT3;    /* Err: Wrong color components */
-            }
-
-            /* Check if all tables corresponding to each components have been loaded */
-            for (i = 0; i < jd->ncomp; i++) {
-                b = seg[2 + 2 * i]; /* Get huffman table ID */
-                if (b != 0x00 && b != 0x11) {
-                    return JDR_FMT3;    /* Err: Different table number for DC/AC element */
-                }
-                n = i ? 1 : 0;                          /* Component class */
-                if (!jd->huffbits[n][0] || !jd->huffbits[n][1]) {   /* Check huffman table for this component */
-                    return JDR_FMT1;                    /* Err: Nnot loaded */
-                }
-                if (!jd->qttbl[jd->qtid[i]]) {          /* Check dequantizer table for this component */
-                    return JDR_FMT1;                    /* Err: Not loaded */
-                }
-            }
-
-            /* Allocate working buffer for MCU and pixel output */
-            n = jd->msy * jd->msx;                      /* Number of Y blocks in the MCU */
-            if (!n) {
-                return JDR_FMT1;    /* Err: SOF0 has not been loaded */
-            }
-            len = n * 64 * 2 + 64;                      /* Allocate buffer for IDCT and RGB output */
-            if (len < 256) {
-                len = 256;    /* but at least 256 byte is required for IDCT */
-            }
-            if (len < n * 64 * 4) {
-                len = n * 64 * 4;    /* support ARGB8888 */
-            }
-            jd->workbuf = alloc_pool(jd, len);          /* and it may occupy a part of following MCU working buffer for RGB output */
-            if (!jd->workbuf) {
-                return JDR_MEM1;    /* Err: not enough memory */
-            }
-            jd->mcubuf = alloc_pool(jd, (n + 2) * 64 * sizeof(jd_yuv_t));   /* Allocate MCU working buffer */
-            if (!jd->mcubuf) {
-                return JDR_MEM1;    /* Err: not enough memory */
-            }
-
-            /* Align stream read offset to JD_SZBUF */
-            if (ofs %= JD_SZBUF) {
-                jd->dctr = jd->infunc(jd, seg + ofs, (size_t)(JD_SZBUF - ofs));
-            }
-            jd->dptr = seg + ofs - (JD_FASTDECODE ? 0 : 1);
-
-            return JDR_OK;      /* Initialization succeeded. Ready to decompress the JPEG image. */
-
         case 0xC1:  /* SOF1 */
         case 0xC2:  /* SOF2 */
         case 0xC3:  /* SOF3 */
@@ -1328,12 +1374,13 @@ JRESULT jd_prepare(
         case 0xCF:  /* SOF15 */
         case 0xD9:  /* EOI */
             return JDR_FMT3;    /* Unsuppoted JPEG standard (may be progressive JPEG) */
-
         default:    /* Unknown segment (comment, exif or etc..) */
+            JD_LOG("Skip segment marker %02X,%lld", marker, len);
             /* Skip segment data (null pointer specifies to remove data from the stream) */
-            if (jd->infunc(jd, 0, len) != len) {
+            if (jd->infunc(jd, NULL, len) != len) {
                 return JDR_INP;
             }
+            break;
         }
     }
 }
