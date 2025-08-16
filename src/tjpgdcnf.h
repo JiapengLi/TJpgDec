@@ -71,5 +71,14 @@
 #   define JD_SWAP_RED_AND_BLUE         0
 #endif
 
+// Do not change this, it is the minimum size in bytes of the workspace needed by the decoder
+#if JD_FASTDECODE == 0
+#define TJPGD_WORKSPACE_SIZE 3100
+#elif JD_FASTDECODE == 1
+#define TJPGD_WORKSPACE_SIZE 3500
+#elif JD_FASTDECODE == 2
+#define TJPGD_WORKSPACE_SIZE (3500 + 6144)
+#endif
+
 #include <stdio.h>
 #define JD_LOG(x...)                    do {printf(x); printf("\n");} while(0)
