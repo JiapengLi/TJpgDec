@@ -1509,7 +1509,7 @@ JRESULT jd_test(JDEC *jd)
     uint8_t last_d = 0, d = 0, last_dbit = 0, dbit = 0, cnt = 0, cmp = 0, id = 0, cls = 0, i = 0, j = 0, bl, bl1, val, ebits, zeros = 0;
     uint32_t reg = 0;
     JHUFF huff;
-    uint8_t bits_threshold = 23, n_y, n_cmp;
+    uint8_t bits_threshold = 15, n_y, n_cmp;
     int block_id = 0;
     bool next_huff = true;
 

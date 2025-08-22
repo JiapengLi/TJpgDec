@@ -80,7 +80,7 @@
 #define TJPGD_WORKSPACE_SIZE (3500 + 6144)
 #endif
 
-#define JD_DEBUG                        0
+#define JD_DEBUG                        1
 
 #if JD_DEBUG
 #include <stdio.h>
