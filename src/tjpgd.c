@@ -1526,8 +1526,14 @@ JRESULT jd_test(JDEC *jd)
             dp = jd->inbuf; /* Top of input buffer */
             dc = jd->infunc(jd, dp, JD_SZBUF);
             if (!dc) {
+                JD_LOG("No more data");
                 return 0 - (int)JDR_INP;    /* Err: read error or wrong stream termination */
             }
+        }
+
+        if (dbit > 24) {
+            JD_LOG("No more buffer");
+            return 0 - (int)JDR_FMT4;    /* Err: read error or wrong stream termination */
         }
 
         /* reg is right aligned */
@@ -1536,31 +1542,24 @@ JRESULT jd_test(JDEC *jd)
         dc--;
         dp++;
 
-        if (dbit > 24) {
-            JD_LOG("Shifted reg: %08X, dbit: %u", reg, dbit);
-            reg <<= 8;
-            dbit -= 8;
-        }
-
         if (d == 0xFF) {
             continue;
         } else if (last_d == 0xFF) {
             JD_LOG("Found marker %02X", d);
             if (d == 0x00) {
                 JD_LOG("Padding byte");
-                d = 0xFF;
-                reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)d << (32 - dbit - 8));
+                reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)0xFF << (32 - dbit - 8));
                 dbit += 8;
-                d = 0;
             } else {
                 if (d == 0xD9) {
                     JD_LOG("EOI marker");
                     bits_threshold = 0;
-                } else if ((d >= 0xD0) && (d <= 0xD7)) {
-                    JD_LOG("RST marker %02X", d);
+                } else {
+                    if ((d >= 0xD0) && (d <= 0xD7)) {
+                        JD_LOG("RST marker %02X", d);
+                    }
+                    continue;
                 }
-                d = 0;
-                continue;
             }
         } else {
             reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)d << (32 - dbit - 8));

@@ -42,7 +42,8 @@ typedef enum {
     JDR_PAR,    /* 5: Parameter error */
     JDR_FMT1,   /* 6: Data format error (may be broken data) */
     JDR_FMT2,   /* 7: Right format but not supported */
-    JDR_FMT3    /* 8: Not supported JPEG standard */
+    JDR_FMT3,   /* 8: Not supported JPEG standard */
+    JDR_FMT4,
 } JRESULT;
 
 
