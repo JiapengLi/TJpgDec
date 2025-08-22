@@ -80,6 +80,9 @@
 #define TJPGD_WORKSPACE_SIZE (3500 + 6144)
 #endif
 
+#define JD_DEBUG                        0
+
+#if JD_DEBUG
 #include <stdio.h>
 #define JD_LOG(x...)                    do {printf(x); printf("\n");} while(0)
 #define JD_HEXDUMP(x, y)             do { \
@@ -89,4 +92,7 @@
     } \
     printf("\n"); \
 } while(0)
-
+#else
+#define JD_LOG(x...)                do {} while(0)
+#define JD_HEXDUMP(x, y)            do {} while(0)
+#endif

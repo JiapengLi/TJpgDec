@@ -13,6 +13,7 @@ extern "C" {
 
 #if defined(__GNUC__)  // GCC or compatible compiler
 #include <stdint.h>
+#include <stdbool.h>
 #elif defined(_WIN32)
 typedef unsigned char   uint8_t;
 typedef unsigned short  uint16_t;
@@ -21,6 +22,7 @@ typedef unsigned long   uint32_t;
 typedef long            int32_t;
 #else
 #include <stdint.h>
+#include <stdbool.h>
 #endif
 
 #if JD_FASTDECODE >= 1

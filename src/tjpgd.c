@@ -1509,7 +1509,9 @@ JRESULT jd_test(JDEC *jd)
     uint8_t last_d = 0, d = 0, last_dbit = 0, dbit = 0, cnt = 0, cmp = 0, id = 0, cls = 0, i = 0, j = 0, bl, bl1, val, ebits, zeros = 0;
     uint32_t reg = 0;
     JHUFF huff;
-    uint8_t bits_threshold = 15, n_y, n_cmp;
+    uint8_t bits_threshold = 23, n_y, n_cmp;
+    int block_id = 0;
+    bool next_huff = true;
 
     n_y = jd->msy * jd->msx; /* Number of Y blocks in the MCU */
     if (jd->ncomp == 1) {
@@ -1518,7 +1520,7 @@ JRESULT jd_test(JDEC *jd)
         n_cmp = n_y + 2;
     }
 
-    /* n: 1, 2, 4, ncomp: 1, 3 */
+    /* n_y: 1, 2, 4, ncomp: 1, 3 */
     while (1) {
         if (dc == 0) {
             dp = jd->inbuf; /* Top of input buffer */
@@ -1531,94 +1533,103 @@ JRESULT jd_test(JDEC *jd)
         /* reg is right aligned */
         last_d = d;
         d = *dp;
-
-        if (dbit > 24) {
-            reg <<= 8;
-            dbit -= 8;
-            JD_LOG("Shifted reg: %08X, dbit: %u", reg, dbit);
-        }
-        reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)d << (32 - dbit - 8));
-        dbit += 8;
         dc--;
         dp++;
 
-        /* process escape characters */
-        if ((dbit >= 16) && (last_d == 0xFF)) {
+        if (dbit > 24) {
+            JD_LOG("Shifted reg: %08X, dbit: %u", reg, dbit);
+            reg <<= 8;
+            dbit -= 8;
+        }
+
+        if (d == 0xFF) {
+            continue;
+        } else if (last_d == 0xFF) {
             JD_LOG("Found marker %02X", d);
-            if ((d == 0x00) || (d == 0xFF)) {
-                dbit -= 8;
-                reg &= ~(0xFFFFFFFF >> dbit);
+            if (d == 0x00) {
+                JD_LOG("Padding byte");
+                d = 0xFF;
+                reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)d << (32 - dbit - 8));
+                dbit += 8;
+                d = 0;
             } else {
-                dbit -= 16;
-                reg &= ~(0xFFFFFFFF >> dbit);
                 if (d == 0xD9) {
                     JD_LOG("EOI marker");
                     bits_threshold = 0;
                 } else if ((d >= 0xD0) && (d <= 0xD7)) {
                     JD_LOG("RST marker %02X", d);
                 }
+                d = 0;
+                continue;
             }
+        } else {
+            reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)d << (32 - dbit - 8));
+            dbit += 8;
         }
 
-        /* in case of multiple FF in the image, both last_d and d are 0xFF*/
-        if (d == 0xFF) {
-            continue;
-        }
+        JD_LOG("Buffer: %08X %u %02X", reg, dbit, d);
 
         while (dbit > bits_threshold) {
-            JD_LOG("Buffer: %08X %u", reg, dbit);
+            if (next_huff) {
+                cls = !!cnt;
+                huff.huffbits = jd->huffbits[id][cls];
+                huff.huffcode = jd->huffcode[id][cls];
+                huff.huffdata = jd->huffdata[id][cls];
 
-            cls = !!cnt;
-            huff.huffbits = jd->huffbits[id][cls];
-            huff.huffcode = jd->huffcode[id][cls];
-            huff.huffdata = jd->huffdata[id][cls];
-            JD_LOG("%s table, id %d, cls %d, cnt %d", cls == 0 ? "DC" : "AC", id, cls, cnt);
+                JD_LOG("block %u, cmp %u, %s table, id %d, cls %d, cnt %d, reg %08X, dbit %u", block_id, cmp, cls == 0 ? "DC" : "AC", id, cls, cnt, reg, dbit);
 
-            bl = jd_get_hc(&huff, reg, dbit, &val);
-            if (!bl) {
-                JD_LOG("bl Huffman code too short");
-                break;
-            }
-
-            last_dbit = dbit;
-            dbit -= bl;
-            reg <<= bl;
-
-            if ((val != 0) || (cnt == 0)) {
-                zeros = val >> 4;
-                bl1 = val & 0x0F;
-
-                if (dbit < bl1) {
-                    JD_LOG("bl1 Huffman code too short: %u < %u", dbit, bl1);
-                    return JDR_FMT1;  /* Err: Huffman code too short */
+                bl = jd_get_hc(&huff, reg, dbit, &val);
+                if (!bl) {
+                    JD_LOG("bl Huffman code too short");
+                    break;
                 }
 
-                ebits = reg >> (32 - bl1);
-
-                dbit -= bl1;
-                reg <<= bl1;
-
-                cnt += zeros + 1;
+                last_dbit = dbit;
+                dbit -= bl;
+                reg <<= bl;
+                next_huff = false;
             } else {
-                /* EOB detected */
-                ebits = 0;
-                zeros = 0;
-                bl1 = 0;
-                cnt = 64;
-            }
-            if (cnt == 64) {
-                cnt = 0;
-                cmp++;
-                if (cmp >= n_cmp) {
-                    cmp = 0;
-                }
-                if (cmp < n_y) {
-                    id = 0;
+                if ((val != 0) || (cnt == 0)) {
+                    zeros = val >> 4;
+                    bl1 = val & 0x0F;
+
+                    if (dbit < bl1) {
+                        JD_LOG("bl1 Huffman code too short: %u < %u", dbit, bl1);
+                        return JDR_FMT1;  /* Err: Huffman code too short */
+                    }
+
+                    ebits = reg >> (32 - bl1);
+
+                    dbit -= bl1;
+                    reg <<= bl1;
+
+                    cnt += zeros + 1;
                 } else {
-                    id = 1;
+                    /* EOB detected */
+                    ebits = 0;
+                    zeros = 0;
+                    bl1 = 0;
+                    cnt = 64;
                 }
+                JD_LOG("Found Huffman code: %u %02X %02X %u %u -> %u %08X", bl, val, ebits, bl1, last_dbit, dbit, reg);
+                if (cnt == 64) {
+                    cnt = 0;
+                    JD_LOG("");
+
+                    cmp++;
+                    if (cmp >= n_cmp) {
+                        cmp = 0;
+                    }
+                    if (cmp < n_y) {
+                        id = 0;
+                    } else {
+                        id = 1;
+                    }
+                    block_id++;
+                }
+
+                next_huff = true;
             }
-            JD_LOG("Found Huffman code: %u %02X %02X %u %u -> %u %08X", bl, val, ebits, bl1, last_dbit, dbit, reg);
         }
     }
 }
