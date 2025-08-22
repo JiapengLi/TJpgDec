@@ -274,25 +274,6 @@ static JRESULT create_huffman_tbl(  /* 0:OK, !0:Failed */
             }
         }
 
-        JD_LOG("=== Creating Huffman Table ===");
-        JD_LOG("Class: %s, Table Number: %d", cls ? "AC" : "DC", num);
-
-        JD_LOG("Bit Length Distribution (1-16 bits):");
-        for (i = 0; i < 16; i++) {
-            JD_LOG("  Length %2d: %2d codes", i + 1, pb[i]);
-        }
-
-        JD_LOG("Generated Huffman Codes:");
-        for (i = 0; i < np; i++) {
-            JD_LOG("  Code[%2zu] = 0x%X", i, ph[i]);
-        }
-
-        JD_LOG("Symbol values for each code:");
-        for (i = 0; i < np; i++) {
-            JD_LOG("  Symbol[%2zu] = 0x%02X", i, pd[i]);
-        }
-
-
 #if JD_FASTDECODE == 2
         {
             /* Create fast huffman decode table */
@@ -817,6 +798,7 @@ JRESULT mcu_load(
     jd_yuv_t *bp;
     const int32_t *dqf;
 
+    JD_LOG("mcu_load");
 
     nby = jd->msx * jd->msy;    /* Number of Y blocks (1, 2 or 4) */
     bp = jd->mcubuf;            /* Pointer to the first block of MCU */
@@ -837,6 +819,7 @@ JRESULT mcu_load(
             }
             bc = (unsigned int)d;
             d = jd->dcv[cmp];                       /* DC value of previous block */
+            JD_LOG("DC Element: %d", bc);
             if (bc) {                               /* If there is any difference from previous block */
                 e = bitext(jd, bc);                 /* Extract data bits */
                 if (e < 0) {
@@ -1242,10 +1225,10 @@ JRESULT jd_prepare(
 
         switch (marker) {
         case 0xC0:  /* SOF0 (baseline JPEG) */
-        case 0xDD:
         case 0xC4:
-        case 0xDB:
         case 0xDA:
+        case 0xDB:
+        case 0xDD:
             if (len > JD_SZBUF) {
                 JD_LOG("Insufficient buffer size %lld > %d", len, JD_SZBUF);
                 return JDR_MEM2;
@@ -1254,8 +1237,8 @@ JRESULT jd_prepare(
                 return JDR_INP;
             }
 
-            JD_LOG("Process segment marker %02X,%lld", marker, len);
-            JD_HEXDUMP("Segment data", seg, len);
+            JD_LOG("Process segment marker %02X,%lld:", marker, len);
+            JD_HEXDUMP(seg, len);
             switch (marker) {
             case 0xC0:  /* SOF0 (baseline JPEG) */
                 jd->width = LDB_WORD(&seg[3]);      /* Image width in unit of pixel */
@@ -1269,6 +1252,7 @@ JRESULT jd_prepare(
                 for (i = 0; i < jd->ncomp; i++) {
                     b = seg[7 + 3 * i];                         /* Get sampling factor */
                     if (i == 0) {   /* Y component */
+                        /**/
                         if (b != 0x11 && b != 0x22 && b != 0x21) {  /* Check sampling factor */
                             return JDR_FMT3;                    /* Err: Supports only 4:4:4, 4:2:0 or 4:2:2 */
                         }
@@ -1285,15 +1269,17 @@ JRESULT jd_prepare(
                     }
                 }
 
-                JD_LOG("w: %u, h: %u, ncomp: %u, msx: %u, msy: %u", jd->width, jd->height, jd->ncomp, jd->msx, jd->msy);
-                JD_HEXDUMP("qtid:", jd->qtid, jd->ncomp);
+                JD_LOG("SOF0 start of frame, w: %u, h: %u, ncomp: %u, msx: %u, msy: %u, qtid:", jd->width, jd->height, jd->ncomp, jd->msx, jd->msy);
+                JD_HEXDUMP(jd->qtid, jd->ncomp);
                 break;
 
             case 0xDD:  /* DRI - Define Restart Interval */
                 jd->nrst = LDB_WORD(seg);   /* Get restart interval (MCUs) */
+                JD_LOG("DRI define restart interval: %u", jd->nrst);
                 break;
 
             case 0xC4:  /* DHT - Define Huffman Tables */
+                JD_LOG("DHT define huffman tables:");
                 rc = create_huffman_tbl(jd, seg, len);  /* Create huffman tables */
                 if (rc) {
                     return rc;
@@ -1301,6 +1287,7 @@ JRESULT jd_prepare(
                 break;
 
             case 0xDB:  /* DQT - Define Quaitizer Tables */
+                JD_LOG("DQT define quantizer tables:");
                 rc = create_qt_tbl(jd, seg, len);   /* Create de-quantizer tables */
                 if (rc) {
                     return rc;
@@ -1308,6 +1295,7 @@ JRESULT jd_prepare(
                 break;
 
             case 0xDA:  /* SOS - Start of Scan */
+                JD_LOG("SOS start of scan:");
                 if (!jd->width || !jd->height) {
                     return JDR_FMT1;    /* Err: Invalid image size */
                 }
@@ -1356,6 +1344,7 @@ JRESULT jd_prepare(
                     jd->dctr = jd->infunc(jd, seg + ofs, (size_t)(JD_SZBUF - ofs));
                 }
                 jd->dptr = seg + ofs - (JD_FASTDECODE ? 0 : 1);
+                JD_HEXDUMP(jd->dptr, jd->dctr);
 
                 return JDR_OK;      /* Initialization succeeded. Ready to decompress the JPEG image. */
             }
@@ -1436,5 +1425,201 @@ JRESULT jd_decomp(
     }
 
     return rc;
+}
+
+const char *jd_code2bin(char *buf, int code, int bits)
+{
+    int i;
+
+    for (i = 0; i < bits; i++) {
+        buf[bits - 1 - i] = (code & (1 << i)) ? '1' : '0';
+    }
+    buf[bits] = '\0';
+
+    return buf;
+}
+
+
+void jd_log(JDEC *jd)
+{
+    int i, j, cls, num, total_codes;
+    uint8_t *hb;
+    uint16_t *hc;
+    uint8_t *hd;
+    char buf[32];
+
+    JD_LOG("\n\n---");
+
+    for (cls = 0; cls < 2; cls++) {
+        for (num = 0; num < 2; num++) {
+            hb = jd->huffbits[num][cls];
+            hc = jd->huffcode[num][cls];
+            hd = jd->huffdata[num][cls];
+            if (hb == NULL || hc == NULL || hd == NULL) {
+                continue;
+            }
+
+            JD_LOG("\nTable Number: %d, Class: %s, Huffman Table [%d][%d]:", num, cls ? "AC" : "DC", num, cls);
+            JD_LOG("index, bits, code(hex), code(bin), data");
+            j = 0;
+            for (i = 0; i < 16; i++) {
+                total_codes = hb[i];
+                while (total_codes--)  {
+                    JD_LOG("%3d, %2d, %04X, %17s, %02X", j, i+1, hc[j], jd_code2bin(buf, hc[j], i+1), hd[j]);
+                    j++;
+                }
+            }
+        }
+    }
+}
+
+int jd_get_hc(JHUFF *huff, uint32_t reg, uint8_t dbit, uint8_t *val)
+{
+    uint8_t i, n_codes;
+    uint16_t n_bits;
+
+    const uint8_t *hb = huff->huffbits;
+    const uint16_t *hc = huff->huffcode;
+    const uint8_t *hd = huff->huffdata;
+
+    /* Incremental search for all codes */
+    for (i = 1; i <= 16; i++) {
+        n_codes = *hb++;
+        n_bits = reg >> (32 - i);
+        while (n_codes--)  {
+            if (n_bits == *hc) {  /* Compare code */
+                if (i > dbit) {
+                    return 0;
+                }
+                *val = *hd;
+                return i;
+            }
+            hc++;
+            hd++;
+        }
+    }
+
+    return 0;
+}
+
+JRESULT jd_test(JDEC *jd)
+{
+    size_t dc = jd->dctr;
+    uint8_t *dp = jd->dptr;
+    uint8_t last_d = 0, d = 0, last_dbit = 0, dbit = 0, cnt = 0, cmp = 0, id = 0, cls = 0, i = 0, j = 0, bl, bl1, val, ebits, zeros = 0;
+    uint32_t reg = 0;
+    JHUFF huff;
+    uint8_t bits_threshold = 15, n_y, n_cmp;
+
+    n_y = jd->msy * jd->msx; /* Number of Y blocks in the MCU */
+    if (jd->ncomp == 1) {
+        n_cmp = n_y;
+    } else if (jd->ncomp == 3) {
+        n_cmp = n_y + 2;
+    }
+
+    /* n: 1, 2, 4, ncomp: 1, 3 */
+    while (1) {
+        if (dc == 0) {
+            dp = jd->inbuf; /* Top of input buffer */
+            dc = jd->infunc(jd, dp, JD_SZBUF);
+            if (!dc) {
+                return 0 - (int)JDR_INP;    /* Err: read error or wrong stream termination */
+            }
+        }
+
+        /* reg is right aligned */
+        last_d = d;
+        d = *dp;
+
+        if (dbit > 24) {
+            reg <<= 8;
+            dbit -= 8;
+            JD_LOG("Shifted reg: %08X, dbit: %u", reg, dbit);
+        }
+        reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)d << (32 - dbit - 8));
+        dbit += 8;
+        dc--;
+        dp++;
+
+        /* process escape characters */
+        if ((dbit >= 16) && (last_d == 0xFF)) {
+            JD_LOG("Found marker %02X", d);
+            if ((d == 0x00) || (d == 0xFF)) {
+                dbit -= 8;
+                reg &= ~(0xFFFFFFFF >> dbit);
+            } else {
+                dbit -= 16;
+                reg &= ~(0xFFFFFFFF >> dbit);
+                if (d == 0xD9) {
+                    JD_LOG("EOI marker");
+                    bits_threshold = 0;
+                } else if ((d >= 0xD0) && (d <= 0xD7)) {
+                    JD_LOG("RST marker %02X", d);
+                }
+            }
+        }
+
+        /* in case of multiple FF in the image, both last_d and d are 0xFF*/
+        if (d == 0xFF) {
+            continue;
+        }
+
+        while (dbit > bits_threshold) {
+            JD_LOG("Buffer: %08X %u", reg, dbit);
+
+            cls = !!cnt;
+            huff.huffbits = jd->huffbits[id][cls];
+            huff.huffcode = jd->huffcode[id][cls];
+            huff.huffdata = jd->huffdata[id][cls];
+            JD_LOG("%s table, id %d, cls %d, cnt %d", cls == 0 ? "DC" : "AC", id, cls, cnt);
+
+            bl = jd_get_hc(&huff, reg, dbit, &val);
+            if (!bl) {
+                JD_LOG("bl Huffman code too short");
+                break;
+            }
+
+            last_dbit = dbit;
+            dbit -= bl;
+            reg <<= bl;
+
+            if ((val != 0) || (cnt == 0)) {
+                zeros = val >> 4;
+                bl1 = val & 0x0F;
+
+                if (dbit < bl1) {
+                    JD_LOG("bl1 Huffman code too short: %u < %u", dbit, bl1);
+                    return JDR_FMT1;  /* Err: Huffman code too short */
+                }
+
+                ebits = reg >> (32 - bl1);
+
+                dbit -= bl1;
+                reg <<= bl1;
+
+                cnt += zeros + 1;
+            } else {
+                /* EOB detected */
+                ebits = 0;
+                zeros = 0;
+                bl1 = 0;
+                cnt = 64;
+            }
+            if (cnt == 64) {
+                cnt = 0;
+                cmp++;
+                if (cmp >= n_cmp) {
+                    cmp = 0;
+                }
+                if (cmp < n_y) {
+                    id = 0;
+                } else {
+                    id = 1;
+                }
+            }
+            JD_LOG("Found Huffman code: %u %02X %02X %u %u -> %u %08X", bl, val, ebits, bl1, last_dbit, dbit, reg);
+        }
+    }
 }
 

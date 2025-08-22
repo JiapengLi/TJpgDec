@@ -6,11 +6,11 @@
 // Dummy input/output functions for TJpgDec
 size_t input_func(JDEC *jd, uint8_t *buf, size_t len) {
     FILE *fp = (FILE *)jd->device;
+
+    printf("rd %zu\n", len);
     if (buf) {
-        printf("Reading %zu bytes from JPEG file\n", len);
         return fread(buf, 1, len, fp);
     } else {
-        printf("Skipping %zu bytes in JPEG file\n", len);
         fseek(fp, len, SEEK_CUR);
         return len;
     }
@@ -28,10 +28,11 @@ int output_func(JDEC *jd, void *bitmap, JRECT *rect) {
     for (y = 0; y < h; y++) {
         for (x = 0; x < w; x++) {
             uint8_t pixel = data[y * w + x];
-            printf("Pixel (%d,%d): %d\n", rect->left + x, rect->top + y, pixel);
+            printf("(%02d,%02d): %d, ", rect->left + x, rect->top + y, pixel);
         }
     }
 
+    printf("\n");
     return 1; // Continue decoding
 }
 
@@ -59,14 +60,17 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("\n\n\n");
+    jd_log(&jd);
+    jd_test(&jd);
 
-    printf("Starting JPEG decompression...\n");
-    if (jd_decomp(&jd, output_func, 0) != JDR_OK) {
-        printf("Failed to decode JPEG image\n");
-        fclose(fp);
-        return 1;
-    }
+    // printf("\n\n\n");
+
+    // printf("Starting JPEG decompression...\n");
+    // if (jd_decomp(&jd, output_func, 0) != JDR_OK) {
+    //     printf("Failed to decode JPEG image\n");
+    //     fclose(fp);
+    //     return 1;
+    // }
 
     fclose(fp);
     return 0;

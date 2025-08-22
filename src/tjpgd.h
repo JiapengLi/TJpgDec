@@ -53,7 +53,11 @@ typedef struct {
     uint16_t bottom;    /* Bottom end */
 } JRECT;
 
-
+typedef struct {
+    uint8_t *huffbits;    /* Huffman bit distribution tables [id][dcac] */
+    uint16_t *huffcode;   /* Huffman code word tables [id][dcac] */
+    uint8_t *huffdata;    /* Huffman decoded data tables [id][dcac] */
+} JHUFF;
 
 /* Decompressor object structure */
 typedef struct JDEC JDEC;
@@ -96,6 +100,9 @@ struct JDEC {
 JRESULT jd_prepare(JDEC *jd, size_t (*infunc)(JDEC *, uint8_t *, size_t), void *pool, size_t sz_pool, void *dev);
 JRESULT jd_decomp(JDEC *jd, int (*outfunc)(JDEC *, void *, JRECT *), uint8_t scale);
 
+
+void jd_log(JDEC *jd);
+JRESULT jd_test(JDEC *jd);
 
 #ifdef __cplusplus
 }
