@@ -62,6 +62,11 @@ typedef struct {
     uint8_t *huffdata;    /* Huffman decoded data tables [id][dcac] */
 } JHUFF;
 
+typedef struct {
+    JHUFF huff[2];          /* Huffman tables for DC/AC components */
+    int32_t *qttbl;
+} JCOMP;
+
 /* Decompressor object structure */
 typedef struct JDEC JDEC;
 struct JDEC {
@@ -96,7 +101,10 @@ struct JDEC {
     size_t (*infunc)(JDEC *, uint8_t *, size_t); /* Pointer to jpeg stream input function */
     void *device;               /* Pointer to I/O device identifiler for the session */
 
-    JHUFF huff[6][2];           /* Huffman tables for Y, Cb, Cr components, maximum 6 */
+    struct {
+        JHUFF huff[2];
+        int32_t *qttbl;
+    } component[6];             /* maximum 6 components, Huffman tables for Y, Cb, Cr components */
 };
 
 

@@ -1326,12 +1326,13 @@ JRESULT jd_prepare(
 
                 /* Y */
                 for (i = 0; i < n; i++) {
-                    jd->huff[i][0].huffbits = jd->huffbits[0][0];
-                    jd->huff[i][0].huffcode = jd->huffcode[0][0];
-                    jd->huff[i][0].huffdata = jd->huffdata[0][0];
-                    jd->huff[i][1].huffbits = jd->huffbits[0][1];
-                    jd->huff[i][1].huffcode = jd->huffcode[0][1];
-                    jd->huff[i][1].huffdata = jd->huffdata[0][1];
+                    jd->component[i].huff[0].huffbits = jd->huffbits[0][0];
+                    jd->component[i].huff[0].huffcode = jd->huffcode[0][0];
+                    jd->component[i].huff[0].huffdata = jd->huffdata[0][0];
+                    jd->component[i].huff[1].huffbits = jd->huffbits[0][1];
+                    jd->component[i].huff[1].huffcode = jd->huffcode[0][1];
+                    jd->component[i].huff[1].huffdata = jd->huffdata[0][1];
+                    jd->component[i].qttbl = jd->qttbl[jd->qtid[0]];
 
                     JD_LOG("huff[%d]", i);
                 }
@@ -1339,12 +1340,13 @@ JRESULT jd_prepare(
                 /* CrCb */
                 if (jd->ncomp == 3) {
                     for (i = 0; i < 2; i++) {
-                        jd->huff[n + i][0].huffbits = jd->huffbits[1][0];
-                        jd->huff[n + i][0].huffcode = jd->huffcode[1][0];
-                        jd->huff[n + i][0].huffdata = jd->huffdata[1][0];
-                        jd->huff[n + i][1].huffbits = jd->huffbits[1][1];
-                        jd->huff[n + i][1].huffcode = jd->huffcode[1][1];
-                        jd->huff[n + i][1].huffdata = jd->huffdata[1][1];
+                        jd->component[n + i].huff[0].huffbits = jd->huffbits[1][0];
+                        jd->component[n + i].huff[0].huffcode = jd->huffcode[1][0];
+                        jd->component[n + i].huff[0].huffdata = jd->huffdata[1][0];
+                        jd->component[n + i].huff[1].huffbits = jd->huffbits[1][1];
+                        jd->component[n + i].huff[1].huffcode = jd->huffcode[1][1];
+                        jd->component[n + i].huff[1].huffdata = jd->huffdata[1][1];
+                        jd->component[n + i].qttbl = jd->qttbl[jd->qtid[i + 1]];
                         JD_LOG("huff[%d]", n + i);
                     }
                 }
@@ -1535,10 +1537,11 @@ JRESULT jd_test(JDEC *jd)
     uint8_t last_d = 0, d = 0, dbit = 0, cnt = 0, cmp = 0, cls = 0, bl0, bl1, val, zeros;
     uint32_t dreg = 0;
     int ebits, dcac;
-    JHUFF huff;
     uint8_t bits_threshold = 15, n_y, n_cmp;
-    int block_id = 0, mcu_id = 0;
+    int block_id = 0, mcu_id = 0, total_mcus;
     bool next_huff = true;
+
+    JCOMP *component = &jd->component[cmp];
 
     n_y = jd->msy * jd->msx; /* Number of Y blocks in the MCU */
     if (jd->ncomp == 1) {
@@ -1546,6 +1549,8 @@ JRESULT jd_test(JDEC *jd)
     } else if (jd->ncomp == 3) {
         n_cmp = n_y + 2;
     }
+
+    total_mcus = (jd->width + 8 * jd->msx - 1) / (8 * jd->msx) * ((jd->height + 8 * jd->msy - 1) / (8 * jd->msy));
 
     /* n_y: 1, 2, 4, ncomp: 1, 3 */
     while (1) {
@@ -1598,10 +1603,10 @@ JRESULT jd_test(JDEC *jd)
             if (next_huff) {
                 cls = !!cnt;
 
-                JD_LOG("mcu %u, cmp %u, block %u, %s table, cls %d, cnt %d, dreg %08X, dbit %u",
-                        mcu_id, cmp, block_id, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
+                JD_LOG("mcu %u/%u, cmp %u, block %u, %s table, cls %d, cnt %d, dreg %08X, dbit %u",
+                        mcu_id, total_mcus, cmp, block_id, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
 
-                bl0 = jd_get_hc(&jd->huff[cmp][cls], dreg, dbit, &val);
+                bl0 = jd_get_hc(&component->huff[cls], dreg, dbit, &val);
                 if (!bl0) {
                     JD_LOG("bl0 Huffman code too short: %08X %u", dreg, dbit);
                     return JDR_FMT1;
@@ -1657,9 +1662,13 @@ JRESULT jd_test(JDEC *jd)
                     if (cmp >= n_cmp) {
                         cmp = 0;
                         mcu_id++;
+                        if (mcu_id >= total_mcus) {
+                            JD_LOG("All MCUs processed");
+                            return JDR_OK;
+                        }
                     }
+                    component = &jd->component[cmp];
                 }
-
                 next_huff = true;
             }
         }
