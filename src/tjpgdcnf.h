@@ -14,7 +14,7 @@
 /  8: Grayscale (8-bit/pix)
 */
 #ifndef JD_COLOR_DEPTH
-#define JD_COLOR_DEPTH                  8
+#define JD_COLOR_DEPTH                  24
 #endif
 
 /* Specifies output pixel format.
@@ -96,6 +96,13 @@
     for (int i = 0; i < y; i++) { \
         if (i && i % 8 == 0) printf("\n"); \
         printf("%5d ", x[i]); \
+    } \
+    printf("\n"); \
+} while(0)
+#define JD_RGBDUMP(x, y)             do { \
+    for (int i = 0; i < y / 3; i++) { \
+        if (i && i % 8 == 0) printf("\n"); \
+        printf("(%3d,%3d,%3d) ", x[i * 3], x[i * 3 + 1], x[i * 3 + 2]); \
     } \
     printf("\n"); \
 } while(0)

@@ -131,7 +131,22 @@ static uint8_t BYTECLIP(int val)
 
 #endif
 
+#define CVACC_COEF   1024
 
+static inline uint8_t ycbcr2r(int Y, int Cb, int Cr)
+{
+    return BYTECLIP(Y + ((int)(1.402 * CVACC_COEF) * Cr) / CVACC_COEF);
+}
+
+static inline uint8_t ycbcr2g(int Y, int Cb, int Cr)
+{
+    return BYTECLIP(Y - (((int)(0.344 * CVACC_COEF) * Cb + (int)(0.714 * CVACC_COEF) * Cr) / CVACC_COEF));
+}
+
+static inline uint8_t ycbcr2b(int Y, int Cb, int Cr)
+{
+    return BYTECLIP(Y + ((int)(1.772 * CVACC_COEF) * Cb) / CVACC_COEF);
+}
 
 /*-----------------------------------------------------------------------*/
 /* Allocate a memory block from memory pool                              */
@@ -1458,6 +1473,8 @@ JRESULT jd_decomp(
     return rc;
 }
 
+/*-----------------------------------------------------------------------------------------------------------------------*/
+
 const char *jd_code2bin(char *buf, int code, int bits)
 {
     int i;
@@ -1498,7 +1515,7 @@ void jd_log(JDEC *jd)
             for (i = 0; i < 16; i++) {
                 total_codes = hb[i];
                 while (total_codes--)  {
-                    JD_LOG("%3d, %2d, %04X, %17s, %02X", j, i+1, hc[j], jd_code2bin(buf, hc[j], i+1), hd[j]);
+                    JD_LOG("%3d, %2d, %04X, %17s, %02X", j, i + 1, hc[j], jd_code2bin(buf, hc[j], i + 1), hd[j]);
                     j++;
                 }
             }
@@ -1549,6 +1566,147 @@ int jd_get_hc(JHUFF *huff, uint32_t dreg, uint8_t dbit, uint8_t *val)
     return 0;
 }
 
+void yuv444_to_rgb888(JDEC *jd)
+{
+    uint8_t *pix = (uint8_t *)jd->workbuf;
+    jd_yuv_t *py, *pcb, *pcr;
+    int yy, cb, cr;
+
+    /* In YUV444, each pixel has its own Y, Cb, Cr values */
+    py  = jd->mcubuf;        // Y block start
+    pcb = py + 64;           // Cb block start
+    pcr = pcb + 64;          // Cr block start
+
+    for (unsigned int iy = 0; iy < 8; iy++) {
+        for (unsigned int ix = 0; ix < 8; ix++) {
+            yy = *py++;
+            cb = *pcb++ - 128;
+            cr = *pcr++ - 128;
+
+            *pix++ = ycbcr2r(yy, cb, cr);
+            *pix++ = ycbcr2g(yy, cb, cr);
+            *pix++ = ycbcr2b(yy, cb, cr);
+        }
+    }
+
+    JD_LOG("RGB888 (YUV444):");
+    pix = (uint8_t *)jd->workbuf;
+    JD_RGBDUMP(pix, 3 * 64);
+}
+
+
+void yuv422_to_rgb888(JDEC *jd)
+{
+    int iy, ix, icmp;
+    jd_yuv_t *py, *pcb, *pcr;
+    uint8_t *pix = (uint8_t *)jd->workbuf;
+
+    int y_block_col, y_block_row;
+    int yy, cb, cr;
+
+    // 4 blocks: Y1, Y2, Cb, Cr → 16x8 Y region
+    pcb = jd->mcubuf + 64 * 2;   // Cb block starts after Y1 + Y2
+    pcr = pcb + 64;              // Cr block starts after Cb
+
+    // Loop through the two Y blocks (icmp = 0: left, 1: right)
+    for (icmp = 0; icmp < 2; icmp++) {
+        py = jd->mcubuf + icmp * 64;
+        pix = (uint8_t *)jd->workbuf;
+
+        // Block positions: 0=(0,0), 1=(8,0)
+        y_block_col = (icmp & 1) << 3;  // 0 or 8
+        y_block_row = 0;                // Only one row of Y blocks
+
+        for (iy = 0; iy < 8; iy++) {
+            for (ix = 0; ix < 8; ix++) {
+                int x_abs = y_block_col + ix;
+                int y_abs = y_block_row + iy;
+
+                // Cb/Cr sampled at 2:1 horizontally, 1:1 vertically → 8x8 UV blocks
+                int uv_idx = (y_abs << 3) + (x_abs >> 1);
+
+                yy = *py++;
+                cb = pcb[uv_idx] - 128;
+                cr = pcr[uv_idx] - 128;
+
+                *pix++ = ycbcr2r(yy, cb, cr);
+                *pix++ = ycbcr2g(yy, cb, cr);
+                *pix++ = ycbcr2b(yy, cb, cr);
+            }
+        }
+
+        JD_LOG("RGB888 (YUV422):");
+        pix = (uint8_t *)jd->workbuf;
+        JD_RGBDUMP(pix, 3 * 64);
+    }
+}
+
+void yuv400_to_rgb888(JDEC *jd)
+{
+    uint8_t *pix;
+    jd_yuv_t *py;
+    int yy, cb = 0, cr = 0;
+
+    /* Build a RGB MCU from discrete comopnents */
+    pix = (uint8_t *)jd->workbuf;
+    py = jd->mcubuf;
+    for (unsigned int iy = 0; iy < 8; iy++) {
+        for (unsigned int ix = 0; ix < 8; ix++) {
+            yy = *py++;   /* Get Y component */
+            *pix++ = ycbcr2r(yy, cb, cr);
+            *pix++ = ycbcr2g(yy, cb, cr);
+            *pix++ = ycbcr2b(yy, cb, cr);
+        }
+    }
+
+    JD_LOG("RGB888:");
+    pix = (uint8_t *)jd->workbuf;
+    JD_RGBDUMP(pix, 3*64);
+}
+
+void yuv420_to_rgb888(JDEC *jd)
+{
+    int iy, ix, icmp;
+    jd_yuv_t *py, *pcb, *pcr;
+    uint8_t *pix = (uint8_t *)jd->workbuf;
+
+    int y_block_col, y_block_row;
+    int yy, cb, cr;
+
+    // 6 blocks: Y1,Y2,Y3,Y4,Cb,Cr
+    pcb = jd->mcubuf + 64 * 4;     // Cb block起点
+    pcr = pcb + 64;                // Cr block起点
+
+    for (icmp = 0; icmp < 4; icmp++) {
+        py = jd->mcubuf + icmp * 64;
+        pix = (uint8_t *)jd->workbuf;
+
+        // 0: (0, 0), 1: (8, 0), 2: (0, 8), 3: (8, 8)
+        y_block_col = (icmp & 1) << 3;
+        y_block_row = (icmp >> 1) << 3;
+
+        for (iy = 0; iy < 8; iy++) {
+            for (ix = 0; ix < 8; ix++) {
+                int x_abs = y_block_col + ix;
+                int y_abs = y_block_row + iy;
+                int uv_idx = ((y_abs >> 1) << 3) + (x_abs >> 1);    // y/2 * 8 + x/2
+
+                yy = *py++;
+                cb = pcb[uv_idx] - 128;
+                cr = pcr[uv_idx] - 128;
+
+                *pix++ = ycbcr2r(yy, cb, cr);
+                *pix++ = ycbcr2g(yy, cb, cr);
+                *pix++ = ycbcr2b(yy, cb, cr);
+            }
+        }
+
+        JD_LOG("RGB888:");
+        pix = (uint8_t *)jd->workbuf;
+        JD_RGBDUMP(pix, 3*64);
+    }
+}
+
 JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
 {
     int cmp, i;
@@ -1575,6 +1733,19 @@ JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
         JD_LOG("P:");
         JD_INTDUMP(p, 64);
     }
+
+    /* Convert to RGB */
+    if ((jd->ncomp == 1) && (jd->msx == 1) && (jd->msy == 1)) {
+        yuv400_to_rgb888(jd);
+    } else if ((jd->ncomp == 3) && (jd->msx == 1) && (jd->msy == 1)) {
+        yuv444_to_rgb888(jd);
+    } else if ((jd->ncomp == 3) && (jd->msx == 2) && (jd->msy == 2)) {
+        yuv420_to_rgb888(jd);
+    } else if ((jd->ncomp == 3) && (jd->msx == 2) && (jd->msy == 1)) {
+        yuv422_to_rgb888(jd);
+    }
+
+    return JDR_OK;
 }
 
 JRESULT jd_test(JDEC *jd)
@@ -1610,7 +1781,7 @@ JRESULT jd_test(JDEC *jd)
             dp = jd->inbuf; /* Top of input buffer */
             dc = jd->infunc(jd, dp, JD_SZBUF);
             if (!dc) {
-                JD_LOG("No more data");
+                JD_LOG("No more data, %d", dbit);
                 return 0 - (int)JDR_INP;    /* Err: read error or wrong stream termination */
             }
         }
@@ -1656,7 +1827,7 @@ JRESULT jd_test(JDEC *jd)
                 cls = !!cnt;
 
                 JD_LOG("mcu %u/%u, cmp %u, block %u, %s table, cls %d, cnt %d, dreg %08X, dbit %u",
-                        mcu_id, total_mcus, cmp, block_id, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
+                       mcu_id, total_mcus, cmp, block_id, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
 
                 bl0 = jd_get_hc(&component->huff[cls], dreg, dbit, &val);
                 if (!bl0) {
@@ -1667,7 +1838,17 @@ JRESULT jd_test(JDEC *jd)
                 dbit -= bl0;
                 dreg <<= bl0;
                 next_huff = false;
-            } else {
+
+                JD_LOG("processing huff, bl0 %d, val %02X", bl0, val);
+
+                if (val != 0) {
+                    continue;
+                }
+            }
+
+            if (!next_huff) {
+                JD_LOG("processing bits, cnt %d val %02X", cnt, val);
+
                 if ((val != 0) || (cnt == 0)) {
                     zeros = val >> 4;
                     bl1 = val & 0x0F;
@@ -1727,7 +1908,7 @@ JRESULT jd_test(JDEC *jd)
                         cmp = 0;
                         mcu_id++;
                         if (mcu_id >= total_mcus) {
-                            JD_LOG("All MCUs processed");
+                            JD_LOG("All MCUs processed (%u padding bits: %X)", dbit, dreg >> (32 - dbit));
                             return JDR_OK;
                         }
                     }
