@@ -111,6 +111,7 @@ struct JDEC {
 JRESULT jd_prepare(JDEC *jd, size_t (*infunc)(JDEC *, uint8_t *, size_t), void *pool, size_t sz_pool, void *dev);
 JRESULT jd_decomp(JDEC *jd, int (*outfunc)(JDEC *, void *, JRECT *), uint8_t scale);
 
+JRESULT jd_decomp2(JDEC *jd, int (*outfunc)(JDEC *, void *, JRECT *), uint8_t scale);
 
 void jd_log(JDEC *jd);
 JRESULT jd_test(JDEC *jd);

@@ -1566,6 +1566,41 @@ int jd_get_hc(JHUFF *huff, uint32_t dreg, uint8_t dbit, uint8_t *val)
     return 0;
 }
 
+int yuv_to_gray(void *buf, int yy, int cb, int cr)
+{
+    return 1;
+}
+
+int yuv_to_rgb888(void *buf, int yy, int cb, int cr)
+{
+    return 3;
+}
+
+int yuv_to_bgr888(void *buf, int yy, int cb, int cr)
+{
+    return 3;
+}
+
+int yuv_to_rgb565(void *buf, int yy, int cb, int cr)
+{
+    return 2;
+}
+
+int yuv_to_bgr565(void *buf, int yy, int cb, int cr)
+{
+    return 3;
+}
+
+int yuv_to_argb888(void *buf, int yy, int cb, int cr)
+{
+    return 4;
+}
+
+int yuv_to_abgr888(void *buf, int yy, int cb, int cr)
+{
+    return 4;
+}
+
 void yuv444_to_rgb888(JDEC *jd)
 {
     uint8_t *pix = (uint8_t *)jd->workbuf;
