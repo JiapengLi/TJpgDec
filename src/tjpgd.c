@@ -1512,6 +1512,12 @@ void jd_log(JDEC *jd)
             JD_INTDUMP(p, 64);
         }
     }
+
+    JD_LOG("\nIpsf:");
+    JD_INTDUMP(Ipsf, 64);
+
+    JD_LOG("\nZigZag:");
+    JD_INTDUMP(Zig, 64);
 }
 
 int jd_get_hc(JHUFF *huff, uint32_t dreg, uint8_t dbit, uint8_t *val)
@@ -1543,6 +1549,34 @@ int jd_get_hc(JHUFF *huff, uint32_t dreg, uint8_t dbit, uint8_t *val)
     return 0;
 }
 
+JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
+{
+    int cmp, i;
+    JCOMP *component;
+    jd_yuv_t *p;
+    int32_t *tmp = (int32_t *)jd->workbuf;
+
+    for (cmp = 0; cmp < n_cmp; cmp++) {
+        component = &jd->component[cmp];
+        p = &jd->mcubuf[cmp * 64];
+        JD_LOG("Component %d:", cmp);
+        JD_LOG("P:");
+        JD_INTDUMP(p, 64);
+        for (i = 0; i < 64; i++) {
+            if (p[i]) {
+                tmp[i] = p[i] * component->qttbl[i] >> 8;
+            } else {
+                tmp[i] = 0;
+            }
+        }
+        JD_LOG("TMP:");
+        JD_INTDUMP(tmp, 64);
+        block_idct(tmp, p);
+        JD_LOG("P:");
+        JD_INTDUMP(p, 64);
+    }
+}
+
 JRESULT jd_test(JDEC *jd)
 {
     size_t dc = jd->dctr;
@@ -1562,7 +1596,11 @@ JRESULT jd_test(JDEC *jd)
         n_cmp = n_y;
     } else if (jd->ncomp == 3) {
         n_cmp = n_y + 2;
+    } else {
+        return JDR_FMT1;    /* Err: Supports only Grayscale and Y/Cb/Cr */
     }
+
+    memset(mcubuf + 1, 0, 63 * sizeof(jd_yuv_t));
 
     total_mcus = (jd->width + 8 * jd->msx - 1) / (8 * jd->msx) * ((jd->height + 8 * jd->msy - 1) / (8 * jd->msy));
 
@@ -1639,7 +1677,6 @@ JRESULT jd_test(JDEC *jd)
                         return JDR_FMT1;
                     }
 
-                    memset(&mcubuf[cnt], 0, zeros * sizeof(jd_yuv_t));
                     cnt += zeros;
 
                     if (bl1) {
@@ -1647,6 +1684,10 @@ JRESULT jd_test(JDEC *jd)
                         if (!(dreg & 0x80000000)) {
                             ebits -= (1 << bl1) - 1;    /* Restore negative value if needed */
                         }
+                    } else {
+                        ebits = 0;
+                    }
+                    if ((cnt == 0) || bl1) {
                         if (cnt == 0) {
                             /* DC component */
                             dcac = *component->dcv + ebits;
@@ -1655,23 +1696,22 @@ JRESULT jd_test(JDEC *jd)
                             dcac = ebits;
                             /* AC component */
                         }
-                        mcubuf[cnt] = dcac;
-                    } else {
-                        ebits = 0;
-                    }
 
-                    dbit -= bl1;
-                    dreg <<= bl1;
-                    cnt += 1;
+                        /* reverse zigzag */
+                        mcubuf[Zig[cnt]] = dcac;
+
+                        dbit -= bl1;
+                        dreg <<= bl1;
+                        cnt += 1;
+                    }
                 } else {
                     /* EOB detected */
-                    zeros = 64 - cnt;
-                    memset(&mcubuf[cnt], 0, zeros * sizeof(jd_yuv_t));
-                    cnt += zeros;
-
+                    zeros = 0;
+                    cnt = 64;
                     ebits = 0;
                 }
-                JD_LOG("Found Huffman code: %08X %u | %u %02X %d", dreg, dbit, bl0, val, ebits);
+
+                JD_LOG("Found Huffman code: %08X %u | %u %02X %d %d %d", dreg, dbit, bl0, val, *component->dcv, ebits, dcac);
                 if (cnt == 64) {
                     cnt = 0;
 
@@ -1681,6 +1721,9 @@ JRESULT jd_test(JDEC *jd)
                     block_id++;
                     cmp++;
                     if (cmp >= n_cmp) {
+                        /* TODO: dequantize -> idct -> output */
+                        jd_output(jd, jd->mcubuf, n_cmp);
+
                         cmp = 0;
                         mcu_id++;
                         if (mcu_id >= total_mcus) {
@@ -1690,6 +1733,8 @@ JRESULT jd_test(JDEC *jd)
                     }
                     component = &jd->component[cmp];
                     mcubuf = &jd->mcubuf[cmp * 64];
+
+                    memset(mcubuf + 1, 0, 63 * sizeof(jd_yuv_t));
                 }
                 next_huff = true;
             }
