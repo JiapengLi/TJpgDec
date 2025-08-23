@@ -1323,6 +1323,32 @@ JRESULT jd_prepare(
                 if (!n) {
                     return JDR_FMT1;    /* Err: SOF0 has not been loaded */
                 }
+
+                /* Y */
+                for (i = 0; i < n; i++) {
+                    jd->huff[i][0].huffbits = jd->huffbits[0][0];
+                    jd->huff[i][0].huffcode = jd->huffcode[0][0];
+                    jd->huff[i][0].huffdata = jd->huffdata[0][0];
+                    jd->huff[i][1].huffbits = jd->huffbits[0][1];
+                    jd->huff[i][1].huffcode = jd->huffcode[0][1];
+                    jd->huff[i][1].huffdata = jd->huffdata[0][1];
+
+                    JD_LOG("huff[%d]", i);
+                }
+
+                /* CrCb */
+                if (jd->ncomp == 3) {
+                    for (i = 0; i < 2; i++) {
+                        jd->huff[n + i][0].huffbits = jd->huffbits[1][0];
+                        jd->huff[n + i][0].huffcode = jd->huffcode[1][0];
+                        jd->huff[n + i][0].huffdata = jd->huffdata[1][0];
+                        jd->huff[n + i][1].huffbits = jd->huffbits[1][1];
+                        jd->huff[n + i][1].huffcode = jd->huffcode[1][1];
+                        jd->huff[n + i][1].huffdata = jd->huffdata[1][1];
+                        JD_LOG("huff[%d]", n + i);
+                    }
+                }
+
                 len = n * 64 * 2 + 64;                      /* Allocate buffer for IDCT and RGB output */
                 if (len < 256) {
                     len = 256;    /* but at least 256 byte is required for IDCT */
@@ -1473,7 +1499,7 @@ void jd_log(JDEC *jd)
     }
 }
 
-int jd_get_hc(JHUFF *huff, uint32_t reg, uint8_t dbit, uint8_t *val)
+int jd_get_hc(JHUFF *huff, uint32_t dreg, uint8_t dbit, uint8_t *val)
 {
     uint8_t i, n_codes;
     uint16_t n_bits;
@@ -1485,7 +1511,7 @@ int jd_get_hc(JHUFF *huff, uint32_t reg, uint8_t dbit, uint8_t *val)
     /* Incremental search for all codes */
     for (i = 1; i <= 16; i++) {
         n_codes = *hb++;
-        n_bits = reg >> (32 - i);
+        n_bits = dreg >> (32 - i);
         while (n_codes--)  {
             if (n_bits == *hc) {  /* Compare code */
                 if (i > dbit) {
@@ -1506,11 +1532,12 @@ JRESULT jd_test(JDEC *jd)
 {
     size_t dc = jd->dctr;
     uint8_t *dp = jd->dptr;
-    uint8_t last_d = 0, d = 0, last_dbit = 0, dbit = 0, cnt = 0, cmp = 0, id = 0, cls = 0, i = 0, j = 0, bl, bl1, val, ebits, zeros = 0;
-    uint32_t reg = 0;
+    uint8_t last_d = 0, d = 0, dbit = 0, cnt = 0, cmp = 0, cls = 0, bl0, bl1, val, zeros;
+    uint32_t dreg = 0;
+    int ebits, dcac;
     JHUFF huff;
     uint8_t bits_threshold = 15, n_y, n_cmp;
-    int block_id = 0;
+    int block_id = 0, mcu_id = 0;
     bool next_huff = true;
 
     n_y = jd->msy * jd->msx; /* Number of Y blocks in the MCU */
@@ -1536,11 +1563,10 @@ JRESULT jd_test(JDEC *jd)
             return 0 - (int)JDR_FMT4;    /* Err: read error or wrong stream termination */
         }
 
-        /* reg is right aligned */
         last_d = d;
         d = *dp;
-        dc--;
         dp++;
+        dc--;
 
         if (d == 0xFF) {
             continue;
@@ -1548,7 +1574,7 @@ JRESULT jd_test(JDEC *jd)
             JD_LOG("Found marker %02X", d);
             if (d == 0x00) {
                 JD_LOG("Padding byte");
-                reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)0xFF << (32 - dbit - 8));
+                dreg = (dreg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)0xFF << (32 - dbit - 8));
                 dbit += 8;
             } else {
                 if (d == 0xD9) {
@@ -1562,30 +1588,27 @@ JRESULT jd_test(JDEC *jd)
                 }
             }
         } else {
-            reg = (reg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)d << (32 - dbit - 8));
+            dreg = (dreg & ~(0xFFFFFFFF >> dbit)) | ((uint32_t)d << (32 - dbit - 8));
             dbit += 8;
         }
 
-        JD_LOG("Buffer: %08X %u %02X", reg, dbit, d);
+        JD_LOG("Buffer: %08X %u %02X", dreg, dbit, d);
 
         while (dbit > bits_threshold) {
             if (next_huff) {
                 cls = !!cnt;
-                huff.huffbits = jd->huffbits[id][cls];
-                huff.huffcode = jd->huffcode[id][cls];
-                huff.huffdata = jd->huffdata[id][cls];
 
-                JD_LOG("block %u, cmp %u, %s table, id %d, cls %d, cnt %d, reg %08X, dbit %u", block_id, cmp, cls == 0 ? "DC" : "AC", id, cls, cnt, reg, dbit);
+                JD_LOG("mcu %u, cmp %u, block %u, %s table, cls %d, cnt %d, dreg %08X, dbit %u",
+                        mcu_id, cmp, block_id, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
 
-                bl = jd_get_hc(&huff, reg, dbit, &val);
-                if (!bl) {
-                    JD_LOG("bl Huffman code too short");
-                    break;
+                bl0 = jd_get_hc(&jd->huff[cmp][cls], dreg, dbit, &val);
+                if (!bl0) {
+                    JD_LOG("bl0 Huffman code too short: %08X %u", dreg, dbit);
+                    return JDR_FMT1;
                 }
 
-                last_dbit = dbit;
-                dbit -= bl;
-                reg <<= bl;
+                dbit -= bl0;
+                dreg <<= bl0;
                 next_huff = false;
             } else {
                 if ((val != 0) || (cnt == 0)) {
@@ -1593,38 +1616,48 @@ JRESULT jd_test(JDEC *jd)
                     bl1 = val & 0x0F;
 
                     if (dbit < bl1) {
-                        JD_LOG("bl1 Huffman code too short: %u < %u", dbit, bl1);
-                        return JDR_FMT1;  /* Err: Huffman code too short */
+                        JD_LOG("bl1 Huffman code too short: %08X %u < %u", dreg, dbit, bl1);
+                        return JDR_FMT1;
                     }
 
-                    ebits = reg >> (32 - bl1);
+                    if (bl1) {
+                        ebits = (int)(dreg >> (32 - bl1));
+                        if (!(dreg & 0x80000000)) {
+                            ebits -= (1 << bl1) - 1;    /* Restore negative value if needed */
+                        }
+                    } else {
+                        ebits = 0;
+                    }
+
+                    if (cnt == 0) {
+                        /* DC component */
+                    } else {
+                        /* AC component */
+                    }
 
                     dbit -= bl1;
-                    reg <<= bl1;
+                    dreg <<= bl1;
 
                     cnt += zeros + 1;
                 } else {
                     /* EOB detected */
-                    ebits = 0;
                     zeros = 0;
                     bl1 = 0;
+                    ebits = 0;
                     cnt = 64;
                 }
-                JD_LOG("Found Huffman code: %u %02X %02X %u %u -> %u %08X", bl, val, ebits, bl1, last_dbit, dbit, reg);
+                JD_LOG("Found Huffman code: %08X %u | %u %02X %d", dreg, dbit, bl0, val, ebits);
                 if (cnt == 64) {
                     cnt = 0;
+
                     JD_LOG("");
 
+                    block_id++;
                     cmp++;
                     if (cmp >= n_cmp) {
                         cmp = 0;
+                        mcu_id++;
                     }
-                    if (cmp < n_y) {
-                        id = 0;
-                    } else {
-                        id = 1;
-                    }
-                    block_id++;
                 }
 
                 next_huff = true;
@@ -1632,4 +1665,3 @@ JRESULT jd_test(JDEC *jd)
         }
     }
 }
-

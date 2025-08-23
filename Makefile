@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -O2
+CFLAGS = -Wall -O2 -Wformat-zero-length
 SRC = ./src
 OBJS = $(SRC)/tjpgd.o main.o
 

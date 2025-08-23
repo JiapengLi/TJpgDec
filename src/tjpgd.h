@@ -95,6 +95,8 @@ struct JDEC {
     size_t sz_pool;             /* Size of momory pool (bytes available) */
     size_t (*infunc)(JDEC *, uint8_t *, size_t); /* Pointer to jpeg stream input function */
     void *device;               /* Pointer to I/O device identifiler for the session */
+
+    JHUFF huff[6][2];           /* Huffman tables for Y, Cb, Cr components, maximum 6 */
 };
 
 

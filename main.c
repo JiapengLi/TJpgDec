@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    uint8_t work[4096]; // Work buffer
+    uint8_t work[8192]; // Work buffer
     JDEC jd;
     JRESULT res;
 
