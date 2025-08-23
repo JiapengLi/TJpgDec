@@ -92,6 +92,13 @@
     } \
     printf("\n"); \
 } while(0)
+#define JD_INTDUMP(x, y)             do { \
+    for (int i = 0; i < y; i++) { \
+        if (i && i % 8 == 0) printf("\n"); \
+        printf("%5d ", x[i]); \
+    } \
+    printf("\n"); \
+} while(0)
 #else
 #define JD_LOG(x...)                do {} while(0)
 #define JD_HEXDUMP(x, y)            do {} while(0)

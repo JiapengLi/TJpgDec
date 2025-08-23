@@ -1333,6 +1333,7 @@ JRESULT jd_prepare(
                     jd->component[i].huff[1].huffcode = jd->huffcode[0][1];
                     jd->component[i].huff[1].huffdata = jd->huffdata[0][1];
                     jd->component[i].qttbl = jd->qttbl[jd->qtid[0]];
+                    jd->component[i].dcv = &jd->dcv[0];
 
                     JD_LOG("huff[%d]", i);
                 }
@@ -1347,6 +1348,8 @@ JRESULT jd_prepare(
                         jd->component[n + i].huff[1].huffcode = jd->huffcode[1][1];
                         jd->component[n + i].huff[1].huffdata = jd->huffdata[1][1];
                         jd->component[n + i].qttbl = jd->qttbl[jd->qtid[i + 1]];
+                        jd->component[n + i].dcv = &jd->dcv[i + 1];
+
                         JD_LOG("huff[%d]", n + i);
                     }
                 }
@@ -1476,6 +1479,8 @@ void jd_log(JDEC *jd)
     uint8_t *hd;
     char buf[32];
 
+    int32_t *p;
+
     JD_LOG("\n\n---");
 
     for (cls = 0; cls < 2; cls++) {
@@ -1497,6 +1502,14 @@ void jd_log(JDEC *jd)
                     j++;
                 }
             }
+        }
+    }
+
+    for (i = 0; i < 4; i++) {
+        if (jd->qttbl[i]) {
+            p = jd->qttbl[i];
+            JD_LOG("\nQuantization Table ID: %d", i);
+            JD_INTDUMP(p, 64);
         }
     }
 }
@@ -1542,6 +1555,7 @@ JRESULT jd_test(JDEC *jd)
     bool next_huff = true;
 
     JCOMP *component = &jd->component[cmp];
+    jd_yuv_t *mcubuf = &jd->mcubuf[cmp * 64];
 
     n_y = jd->msy * jd->msx; /* Number of Y blocks in the MCU */
     if (jd->ncomp == 1) {
@@ -1625,36 +1639,43 @@ JRESULT jd_test(JDEC *jd)
                         return JDR_FMT1;
                     }
 
+                    memset(&mcubuf[cnt], 0, zeros * sizeof(jd_yuv_t));
+                    cnt += zeros;
+
                     if (bl1) {
                         ebits = (int)(dreg >> (32 - bl1));
                         if (!(dreg & 0x80000000)) {
                             ebits -= (1 << bl1) - 1;    /* Restore negative value if needed */
                         }
+                        if (cnt == 0) {
+                            /* DC component */
+                            dcac = *component->dcv + ebits;
+                            *component->dcv = dcac;
+                        } else {
+                            dcac = ebits;
+                            /* AC component */
+                        }
+                        mcubuf[cnt] = dcac;
                     } else {
                         ebits = 0;
                     }
 
-                    if (cnt == 0) {
-                        /* DC component */
-                    } else {
-                        /* AC component */
-                    }
-
                     dbit -= bl1;
                     dreg <<= bl1;
-
-                    cnt += zeros + 1;
+                    cnt += 1;
                 } else {
                     /* EOB detected */
-                    zeros = 0;
-                    bl1 = 0;
+                    zeros = 64 - cnt;
+                    memset(&mcubuf[cnt], 0, zeros * sizeof(jd_yuv_t));
+                    cnt += zeros;
+
                     ebits = 0;
-                    cnt = 64;
                 }
                 JD_LOG("Found Huffman code: %08X %u | %u %02X %d", dreg, dbit, bl0, val, ebits);
                 if (cnt == 64) {
                     cnt = 0;
 
+                    JD_INTDUMP(mcubuf, 64);
                     JD_LOG("");
 
                     block_id++;
@@ -1668,6 +1689,7 @@ JRESULT jd_test(JDEC *jd)
                         }
                     }
                     component = &jd->component[cmp];
+                    mcubuf = &jd->mcubuf[cmp * 64];
                 }
                 next_huff = true;
             }
