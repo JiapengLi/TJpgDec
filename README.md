@@ -1,77 +1,81 @@
-# A TJpgDec (Tiny JPEG Decompressor) Variant
+# TJpgDec (Tiny JPEG Decompressor) Variant
 
-## Compare with Original TJpgDec
+## Overview
 
-- Runtime configurable color mode
-- Lower RAM memory footprint, but use more ROM (which means more features)
-    - single copy jd->workbuf, maximum 4*64 bytes
-    - support very small cache jd->inbuf (minimum several bytes, bufferless)
-- Scale feature removed
-- Very fast single pixel extraction (skip dequantization, idct and color conversion if MCU or block is irrelevant)
-- Add more color formats (Grayscale, RGB565, BGR565, RGB888, BGR888, RGBA8888, BGRA8888)
-- Use less macro variables
-- Single entry point to load buffer
+This project is a variant of the original [TJpgDec](https://elm-chan.org/fsw/tjpgd/), designed for 32-bit MCUs. It features runtime-configurable color modes, reduced RAM usage, and support for additional color formats.
+
+## Key Differences from Original TJpgDec
+
+- **Runtime configurable color mode**
+- **Lower RAM footprint** (uses more ROM for added features)
+    - Single copy of `jd->workbuf`, max 4×64 bytes
+    - Supports very small cache for `jd->inbuf` (bufferless operation possible)
+- **Scale feature removed**
+- **Fast single pixel extraction** (skips dequantization, IDCT, and color conversion if MCU/block is irrelevant)
+- **Additional color formats:** Grayscale, RGB565, BGR565, RGB888, BGR888, RGBA8888, BGRA8888
+- **Fewer macro variables**
+- **Single entry point for buffer loading**
 
 ### Limitations
 
-- Target to 32bits MCU only, 8bits and 16bits MCU may be not supported
-- Strict 8x8 block output, even in 16x16 or 16x8 MCU mode
-- Under YUV 4:2:0 or 4:2:2 mode, 8x8 block output sequence is a subsequence of standard 16x16 or 16x8 output sequence
+- Targeted for 32-bit MCUs; 8-bit and 16-bit MCUs may not be supported
+- Strict 8×8 block output, even in 16×16 or 16×8 MCU mode
+- For YUV 4:2:0 or 4:2:2, 8×8 block output sequence is a subsequence of standard 16×16 or 16×8 output
 
 ## TODO
 
-- clip output images to fit real image boundaries
-- optimize for ARM or RISC-V architectures
-- memory optimization
-- random access to jpeg file?
-- More readable error code
-- make `JD_FASTDECODE = 2` works
+- Clip output images to fit actual image boundaries
+- Optimize for ARM and RISC-V architectures
+- Further memory optimization
+- Random access to JPEG files
+- More readable error codes
+- Make `JD_FASTDECODE = 2` functional
+- Benchmarking and performance analysis
 
-## Build
+## Build Instructions
 
-```
+```bash
 make clean all
 ```
 
-Note: for windows users, use MSYS2 or WSL to get a compatible build environment.
+> **Note:** On Windows, use MSYS2 or WSL for a compatible build environment.
 
-## Test
+## Testing
 
-```
+```bash
 ./test.sh
 ```
 
-## Others
+## Code Formatting
 
-### Auto Format
+To auto-format source files, use:
 
-```
-
+```bash
 astyle \
---suffix=none \
---style=kr \
---indent=spaces=4 \
---pad-oper \
---pad-header \
---pad-comma \
---unpad-paren \
---unpad-brackets \
---align-pointer=name \
---align-reference=name \
---max-code-length=160 \
---break-after-logical \
---lineend=linux \
---convert-tabs \
---verbose \
---add-braces \
-./src/tjpgd.c main.c
+    --suffix=none \
+    --style=kr \
+    --indent=spaces=4 \
+    --pad-oper \
+    --pad-header \
+    --pad-comma \
+    --unpad-paren \
+    --unpad-brackets \
+    --align-pointer=name \
+    --align-reference=name \
+    --max-code-length=160 \
+    --break-after-logical \
+    --lineend=linux \
+    --convert-tabs \
+    --verbose \
+    --add-braces \
+    ./src/tjpgd.c main.c
 ```
 
 ## Acknowledgments
 
-- https://elm-chan.org/fsw/tjpgd/ (Original TJpgDec)
-- https://github.com/ARM-software/Arm-2D (This project is inspired by Arm-2D)
-    - https://mp.weixin.qq.com/s/qDuVUSz9FjVqmAuhFhS6rQ
-- https://www.cnblogs.com/Dreaming-in-Gottingen/p/14428152.html (Good Reference)
+- [Original TJpgDec](https://elm-chan.org/fsw/tjpgd/)
+- [Arm-2D](https://github.com/ARM-software/Arm-2D) (Project inspiration)
+    - [Related article](https://mp.weixin.qq.com/s/qDuVUSz9FjVqmAuhFhS6rQ)
+- [A good article about JPEG basics](https://www.cnblogs.com/Dreaming-in-Gottingen/p/14428152.html)
 
 
