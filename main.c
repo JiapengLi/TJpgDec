@@ -71,7 +71,11 @@ int main(int argc, char *argv[]) {
 
     fclose(fp);
 
+    printf("\n\n\n");
+
     printf("sizeof(JDEC): %zu\n", sizeof(JDEC));
+    printf("Memory Pool: %d\n", sizeof(work) - jd.sz_pool);
+    printf("Total: %d\n", sizeof(JDEC) + sizeof(work) - jd.sz_pool);
 
     return 0;
 }

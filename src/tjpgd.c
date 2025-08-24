@@ -898,20 +898,17 @@ JRESULT jd_prepare(
                     }
                 }
 
-                len = n * 64 * 2 + 64;                      /* Allocate buffer for IDCT and RGB output */
-                if (len < 256) {
-                    len = 256;    /* but at least 256 byte is required for IDCT */
-                }
-                if (len < n * 64 * 4) {
-                    len = n * 64 * 4;    /* support ARGB8888 */
-                }
-                jd->workbuf = alloc_pool(jd, len);          /* and it may occupy a part of following MCU working buffer for RGB output */
+                /* Shared buffer for IDCT (64 * sizeof(int32_t)) and RGB ((64 * sizeof(ARGB8888))) output */
+                len = 64 * 4;
+                jd->workbuf = alloc_pool(jd, len);
                 if (!jd->workbuf) {
-                    return JDR_MEM1;    /* Err: not enough memory */
+                    return JDR_MEM1;
                 }
-                jd->mcubuf = alloc_pool(jd, (n + 2) * 64 * sizeof(jd_yuv_t));   /* Allocate MCU working buffer */
+
+                /* Allocate MCU working buffer */
+                jd->mcubuf = alloc_pool(jd, (n + 2) * 64 * sizeof(jd_yuv_t));
                 if (!jd->mcubuf) {
-                    return JDR_MEM1;    /* Err: not enough memory */
+                    return JDR_MEM1;
                 }
 
                 /* Align stream read offset to JD_SZBUF */
@@ -1079,8 +1076,8 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
                             dcac = *component->dcv + ebits;
                             *component->dcv = dcac;
                         } else {
-                            dcac = ebits;
                             /* AC component */
+                            dcac = ebits;
                         }
 
                         /* reverse zigzag */
