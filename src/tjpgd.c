@@ -991,7 +991,8 @@ JRESULT jd_prepare(
                 }
 
                 /* default Color format */
-                jd->yuv_fmt = jd_yuv_fmt_tab[JD_RGB888];
+                jd->color = JD_RGB888;
+                jd->yuv_fmt = jd_yuv_fmt_tab[jd->color];
 
 #if JD_DEBUG
                 jd_log(jd);
@@ -1201,6 +1202,18 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
             }
         }
     }
+}
+
+JRESULT jd_set_color(JDEC *jd, JCOLOR color)
+{
+    if (!jd) {
+        return JDR_PAR;
+    }
+
+    jd->color = color;
+    jd->yuv_fmt = jd_yuv_fmt_tab[jd->color];
+
+    return JDR_OK;
 }
 
 /*-------------------------------------------------------------------------*/

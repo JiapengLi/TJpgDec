@@ -19,21 +19,71 @@ int32_t input_func(JDEC *jd, uint8_t *buf, int32_t len)
 
 int output_func(JDEC *jd, void *bitmap, JRECT *rect)
 {
+#if JD_DEBUG
     JD_LOG("Decoded rect: (%d,%d)-(%d,%d)", rect->left, rect->top, rect->right, rect->bottom);
+#else
+    // Output the decoded bitmap data
+    uint8_t *pix = (uint8_t *)bitmap;
 
-    // // Output the decoded bitmap data
-    // uint8_t *data = (uint8_t *)bitmap;
-    // int x, y, w, h;
+    int x, y, l;
 
-    // w = rect->right - rect->left + 1;
-    // h = rect->bottom - rect->top + 1;
-    // for (y = 0; y < h; y++) {
-    //     for (x = 0; x < w; x++) {
-    //         uint8_t pixel = data[y * w + x];
-    //         printf("(%02d,%02d): %d, ", rect->left + x, rect->top + y, pixel);
-    //     }
-    // }
-    // return 1; // Continue decoding
+    switch(jd->color) {
+        case JD_GRAYSCALE:
+        default:
+            // Handle grayscale output
+            l = 1;
+            break;
+        case JD_RGB565:
+            // Handle RGB565 output
+            l = 2;
+            break;
+        case JD_BGR565:
+            // Handle BGR565 output
+            l = 2;
+            break;
+        case JD_RGB888:
+            // Handle RGB888 output
+            l = 3;
+            break;
+        case JD_BGR888:
+            // Handle BGR888 output
+            l = 3;
+            break;
+        case JD_RGBA8888:
+            // Handle RGBA8888 output
+            l = 4;
+            break;
+        case JD_BGRA8888:
+            // Handle BGRA8888 output
+            l = 4;
+            break;
+    }
+    printf("(%d,%d)-(%d,%d)\n", rect->left, rect->top, rect->right, rect->bottom);
+    for (y = rect->top; y <= rect->bottom; y++) {
+        for (x = rect->left; x <= rect->right; x++) {
+            if (l == 2) {
+                uint16_t v = *(uint16_t *)pix;
+                int r = (v >> 11) & 0x1F;
+                int g = (v >> 5) & 0x3F;
+                int b = v & 0x1F;
+                r = (r << 3) | (r >> 2);
+                g = (g << 2) | (g >> 4);
+                b = (b << 3) | (b >> 2);
+                printf("(%3d,%3d,%3d) ", r, g, b);
+                pix += 2;
+            } else {
+                int n = l;
+                printf("(");
+                while(n-- > 1) {
+                    printf("%3d,", *pix++);
+                }
+                printf("%3d", *pix++);
+                printf(") ");
+            }
+        }
+        printf("\n");
+    }
+#endif
 
     return 1;
 }
@@ -55,6 +105,32 @@ int main(int argc, char *argv[])
     JDEC jd;
     JRESULT res;
 
+    JCOLOR color;
+
+    if (argc > 2) {
+        if (strcmp(argv[2], "grayscale") == 0) {
+            color = JD_GRAYSCALE;
+        } else if (strcmp(argv[2], "rgb565") == 0) {
+            color = JD_RGB565;
+        } else if (strcmp(argv[2], "bgr565") == 0) {
+            color = JD_BGR565;
+        } else if (strcmp(argv[2], "rgb888") == 0) {
+            color = JD_RGB888;
+        } else if (strcmp(argv[2], "bgr888") == 0) {
+            color = JD_BGR888;
+        } else if (strcmp(argv[2], "rgba8888") == 0) {
+            color = JD_RGBA8888;
+        } else if (strcmp(argv[2], "bgra8888") == 0) {
+            color = JD_BGRA8888;
+        } else {
+            fprintf(stderr, "Unknown color format: %s\n", argv[2]);
+            fclose(fp);
+            return 1;
+        }
+    } else {
+        color = JD_RGB888; // Default color format
+    }
+
     printf("Preparing JPEG decoder...\n");
     res = jd_prepare(&jd, input_func, work, sizeof(work), fp);
     if (res != JDR_OK) {
@@ -62,6 +138,8 @@ int main(int argc, char *argv[])
         fclose(fp);
         return 1;
     }
+
+    jd_set_color(&jd, color);
 
     printf("\n\n\n");
 

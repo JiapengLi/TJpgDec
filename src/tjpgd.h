@@ -32,13 +32,13 @@ typedef uint8_t jd_yuv_t;
 #endif
 
 typedef enum {
-    JD_GRAYSCALE    = 0,
-    JD_RGB565       = 1,
-    JD_BGR565       = 2,
-    JD_RGB888       = 3,
-    JD_BGR888       = 4,
-    JD_RGBA8888     = 5,
-    JD_BGRA8888     = 6,
+    JD_GRAYSCALE    = 0,    // 1B
+    JD_RGB565       = 1,    // 2B
+    JD_BGR565       = 2,    // 2B
+    JD_RGB888       = 3,    // 3B
+    JD_BGR888       = 4,    // 3B
+    JD_RGBA8888     = 5,    // 4B
+    JD_BGRA8888     = 6,    // 4B
 } JCOLOR;
 
 /* Error code */
@@ -127,6 +127,7 @@ struct JDEC {
 /* TJpgDec API functions */
 JRESULT jd_prepare(JDEC *jd, jd_infunc_t infunc, void *pool, int32_t sz_pool, void *dev);
 JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale);
+JRESULT jd_set_color(JDEC *jd, JCOLOR color);
 
 #ifdef __cplusplus
 }
