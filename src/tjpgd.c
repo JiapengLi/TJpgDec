@@ -617,7 +617,7 @@ void yuv400_to_rgb888(JDEC *jd)
 
     JD_LOG("RGB888:");
     pix = (uint8_t *)jd->workbuf;
-    JD_RGBDUMP(pix, 3*64);
+    JD_RGBDUMP(pix, 3 * 64);
 }
 
 void yuv420_to_rgb888(JDEC *jd)
@@ -659,7 +659,7 @@ void yuv420_to_rgb888(JDEC *jd)
 
         JD_LOG("RGB888:");
         pix = (uint8_t *)jd->workbuf;
-        JD_RGBDUMP(pix, 3*64);
+        JD_RGBDUMP(pix, 3 * 64);
     }
 }
 
@@ -918,9 +918,9 @@ JRESULT jd_prepare(
                 jd->dptr = seg + ofs - (JD_FASTDECODE ? 0 : 1);
                 JD_HEXDUMP(jd->dptr, jd->dctr);
 
-                #if JD_DEBUG
+#if JD_DEBUG
                 jd_log(jd);
-                #endif
+#endif
 
                 return JDR_OK;      /* Initialization succeeded. Ready to decompress the JPEG image. */
             }

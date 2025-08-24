@@ -4,10 +4,11 @@
 
 
 // Dummy input/output functions for TJpgDec
-int32_t input_func(JDEC *jd, uint8_t *buf, int32_t len) {
+int32_t input_func(JDEC *jd, uint8_t *buf, int32_t len)
+{
     FILE *fp = (FILE *)jd->device;
 
-    printf("rd %d\n", len);
+    JD_LOG("rd %d", len);
     if (buf) {
         return fread(buf, 1, (size_t)len, fp);
     } else {
@@ -16,27 +17,29 @@ int32_t input_func(JDEC *jd, uint8_t *buf, int32_t len) {
     }
 }
 
-int output_func(JDEC *jd, void *bitmap, JRECT *rect) {
-    printf("Decoded rect: (%d,%d)-(%d,%d)\n", rect->left, rect->top, rect->right, rect->bottom);
+int output_func(JDEC *jd, void *bitmap, JRECT *rect)
+{
+    JD_LOG("Decoded rect: (%d,%d)-(%d,%d)", rect->left, rect->top, rect->right, rect->bottom);
 
-    // Output the decoded bitmap data
-    uint8_t *data = (uint8_t *)bitmap;
-    int x, y, w, h;
+    // // Output the decoded bitmap data
+    // uint8_t *data = (uint8_t *)bitmap;
+    // int x, y, w, h;
 
-    w = rect->right - rect->left + 1;
-    h = rect->bottom - rect->top + 1;
-    for (y = 0; y < h; y++) {
-        for (x = 0; x < w; x++) {
-            uint8_t pixel = data[y * w + x];
-            printf("(%02d,%02d): %d, ", rect->left + x, rect->top + y, pixel);
-        }
-    }
+    // w = rect->right - rect->left + 1;
+    // h = rect->bottom - rect->top + 1;
+    // for (y = 0; y < h; y++) {
+    //     for (x = 0; x < w; x++) {
+    //         uint8_t pixel = data[y * w + x];
+    //         printf("(%02d,%02d): %d, ", rect->left + x, rect->top + y, pixel);
+    //     }
+    // }
+    // return 1; // Continue decoding
 
-    printf("\n");
-    return 1; // Continue decoding
+    return 1;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     if (argc < 2) {
         printf("Usage: %s <jpg_file>\n", argv[0]);
         return 1;
@@ -75,7 +78,7 @@ int main(int argc, char *argv[]) {
 
     printf("sizeof(JDEC): %zu\n", sizeof(JDEC));
     printf("Memory Pool: %d\n", sizeof(work) - jd.sz_pool);
-    printf("Total: %d\n", sizeof(JDEC) + sizeof(work) - jd.sz_pool);
+    printf("%s Total: %d\n", argv[1], sizeof(JDEC) + sizeof(work) - jd.sz_pool);
 
     return 0;
 }
