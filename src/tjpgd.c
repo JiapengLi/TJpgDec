@@ -29,6 +29,8 @@
 #include "tjpgd.h"
 
 
+void jd_log(JDEC *jd);
+
 #if JD_FASTDECODE == 2
 #define HUFF_BIT    10  /* Bit length to apply fast huffman decode */
 #define HUFF_LEN    (1 << HUFF_BIT)
@@ -148,13 +150,15 @@ static inline uint8_t ycbcr2b(int Y, int Cb, int Cr)
     return BYTECLIP(Y + ((int)(1.772 * CVACC_COEF) * Cb) / CVACC_COEF);
 }
 
+#define LDB_WORD(ptr)       (uint16_t)(((uint16_t)*((uint8_t*)(ptr))<<8)|(uint16_t)*(uint8_t*)((ptr)+1))
+
 /*-----------------------------------------------------------------------*/
 /* Allocate a memory block from memory pool                              */
 /*-----------------------------------------------------------------------*/
 
 static void *alloc_pool(  /* Pointer to allocated memory block (NULL:no memory available) */
     JDEC *jd,               /* Pointer to the decompressor object */
-    size_t ndata            /* Number of bytes to allocate */
+    int32_t ndata            /* Number of bytes to allocate */
 )
 {
     char *rp = 0;
@@ -180,8 +184,9 @@ static void *alloc_pool(  /* Pointer to allocated memory block (NULL:no memory a
 
 static JRESULT create_qt_tbl(  /* 0:OK, !0:Failed */
     JDEC *jd,               /* Pointer to the decompressor object */
+    JTABLE *tbl,            /* Pointer to the table structure */
     const uint8_t *data,    /* Pointer to the quantizer tables */
-    size_t ndata            /* Size of input data */
+    int32_t ndata            /* Size of input data */
 )
 {
     unsigned int i, zi;
@@ -203,7 +208,7 @@ static JRESULT create_qt_tbl(  /* 0:OK, !0:Failed */
         if (!pb) {
             return JDR_MEM1;    /* Err: not enough memory */
         }
-        jd->qttbl[i] = pb;                      /* Register the table */
+        tbl->qttbl[i] = pb;                      /* Register the table */
         for (i = 0; i < 64; i++) {              /* Load the table */
             zi = Zig[i];                        /* Zigzag-order to raster-order conversion */
             pb[zi] = (int32_t)((uint32_t) * data++ * Ipsf[zi]); /* Apply scale factor of Arai algorithm to the de-quantizers */
@@ -222,12 +227,13 @@ static JRESULT create_qt_tbl(  /* 0:OK, !0:Failed */
 
 static JRESULT create_huffman_tbl(  /* 0:OK, !0:Failed */
     JDEC *jd,                   /* Pointer to the decompressor object */
+    JTABLE *tbl,            /* Pointer to the table structure */
     const uint8_t *data,        /* Pointer to the packed huffman tables */
-    size_t ndata                /* Size of input data */
+    int32_t ndata                /* Size of input data */
 )
 {
     unsigned int i, j, b, cls, num;
-    size_t np;
+    int32_t np;
     uint8_t d, *pb, *pd;
     uint16_t hc, *ph;
 
@@ -247,7 +253,7 @@ static JRESULT create_huffman_tbl(  /* 0:OK, !0:Failed */
         if (!pb) {
             return JDR_MEM1;    /* Err: not enough memory */
         }
-        jd->huffbits[num][cls] = pb;
+        tbl->huffbits[num][cls] = pb;
         for (np = i = 0; i < 16; i++) {     /* Load number of patterns for 1 to 16-bit code */
             np += (pb[i] = *data++);        /* Get sum of code words for each code */
         }
@@ -255,7 +261,7 @@ static JRESULT create_huffman_tbl(  /* 0:OK, !0:Failed */
         if (!ph) {
             return JDR_MEM1;    /* Err: not enough memory */
         }
-        jd->huffcode[num][cls] = ph;
+        tbl->huffcode[num][cls] = ph;
         hc = 0;
         for (j = i = 0; i < 16; i++) {      /* Re-build huffman code word table */
             b = pb[i];
@@ -273,7 +279,7 @@ static JRESULT create_huffman_tbl(  /* 0:OK, !0:Failed */
         if (!pd) {
             return JDR_MEM1;    /* Err: not enough memory */
         }
-        jd->huffdata[num][cls] = pd;
+        tbl->huffdata[num][cls] = pd;
         if (cls == 0) {
             for (i = 0; i < np; i++) {          /* Load decoded data corresponds to each code word */
                 d = *data++;
@@ -698,27 +704,25 @@ JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
     return JDR_OK;
 }
 
-/*-----------------------------------------------------------------------*/
-/* Analyze the JPEG image and Initialize decompressor object             */
-/*-----------------------------------------------------------------------*/
-
-#define LDB_WORD(ptr)       (uint16_t)(((uint16_t)*((uint8_t*)(ptr))<<8)|(uint16_t)*(uint8_t*)((ptr)+1))
-
-
+/*-------------------------------------------------------------------------*/
+// API
 JRESULT jd_prepare(
     JDEC *jd,               /* Blank decompressor object */
-    size_t (*infunc)(JDEC *, uint8_t *, size_t), /* JPEG strem input function */
+    int32_t (*infunc)(JDEC *, uint8_t *, int32_t), /* JPEG strem input function */
     void *pool,             /* Working buffer for the decompression session */
-    size_t sz_pool,         /* Size of working buffer */
+    int32_t sz_pool,         /* Size of working buffer */
     void *dev               /* I/O device identifier for the session */
 )
 {
     uint8_t *seg, b;
     uint16_t marker;
     unsigned int n, i, ofs;
-    size_t len;
+    int32_t ret, len;
     JRESULT rc;
 
+    JTABLE _tbl, *tbl = &_tbl;
+
+    memset(tbl, 0, sizeof(JTABLE));
 
     memset(jd, 0, sizeof(JDEC));    /* Clear decompression object (this might be a problem if machine's null pointer is not all bits zero) */
     jd->pool = pool;        /* Work memroy */
@@ -733,7 +737,9 @@ JRESULT jd_prepare(
 
     ofs = marker = 0;       /* Find SOI marker */
     do {
-        if (jd->infunc(jd, seg, 1) != 1) {
+        ret = jd->infunc(jd, seg, 1);
+        if (ret != 1) {
+            JD_LOG("ret %d", ret);
             return JDR_INP;    /* Err: SOI was not detected */
         }
         ofs++;
@@ -768,14 +774,14 @@ JRESULT jd_prepare(
         case 0xDB:
         case 0xDD:
             if (len > JD_SZBUF) {
-                JD_LOG("Insufficient buffer size %lld > %d", len, JD_SZBUF);
+                JD_LOG("Insufficient buffer size %d > %d", len, JD_SZBUF);
                 return JDR_MEM2;
             }
             if (jd->infunc(jd, seg, len) != len) {
                 return JDR_INP;
             }
 
-            JD_LOG("Process segment marker %02X,%lld:", marker, len);
+            JD_LOG("Process segment marker %02X,%d:", marker, len);
             JD_HEXDUMP(seg, len);
             switch (marker) {
             case 0xC0:  /* SOF0 (baseline JPEG) */
@@ -801,14 +807,14 @@ JRESULT jd_prepare(
                             return JDR_FMT3;    /* Err: Sampling factor of Cb/Cr must be 1 */
                         }
                     }
-                    jd->qtid[i] = seg[8 + 3 * i];               /* Get dequantizer table ID for this component */
-                    if (jd->qtid[i] > 3) {
+                    tbl->qtid[i] = seg[8 + 3 * i];               /* Get dequantizer table ID for this component */
+                    if (tbl->qtid[i] > 3) {
                         return JDR_FMT3;    /* Err: Invalid ID */
                     }
                 }
 
                 JD_LOG("SOF0 start of frame, w: %u, h: %u, ncomp: %u, msx: %u, msy: %u, qtid:", jd->width, jd->height, jd->ncomp, jd->msx, jd->msy);
-                JD_HEXDUMP(jd->qtid, jd->ncomp);
+                JD_HEXDUMP(tbl->qtid, jd->ncomp);
                 break;
 
             case 0xDD:  /* DRI - Define Restart Interval */
@@ -818,7 +824,7 @@ JRESULT jd_prepare(
 
             case 0xC4:  /* DHT - Define Huffman Tables */
                 JD_LOG("DHT define huffman tables:");
-                rc = create_huffman_tbl(jd, seg, len);  /* Create huffman tables */
+                rc = create_huffman_tbl(jd, tbl, seg, len);  /* Create huffman tables */
                 if (rc) {
                     return rc;
                 }
@@ -826,7 +832,7 @@ JRESULT jd_prepare(
 
             case 0xDB:  /* DQT - Define Quaitizer Tables */
                 JD_LOG("DQT define quantizer tables:");
-                rc = create_qt_tbl(jd, seg, len);   /* Create de-quantizer tables */
+                rc = create_qt_tbl(jd, tbl, seg, len);   /* Create de-quantizer tables */
                 if (rc) {
                     return rc;
                 }
@@ -848,10 +854,10 @@ JRESULT jd_prepare(
                         return JDR_FMT3;    /* Err: Different table number for DC/AC element */
                     }
                     n = i ? 1 : 0;                          /* Component class */
-                    if (!jd->huffbits[n][0] || !jd->huffbits[n][1]) {   /* Check huffman table for this component */
+                    if (!tbl->huffbits[n][0] || !tbl->huffbits[n][1]) {   /* Check huffman table for this component */
                         return JDR_FMT1;                    /* Err: Nnot loaded */
                     }
-                    if (!jd->qttbl[jd->qtid[i]]) {          /* Check dequantizer table for this component */
+                    if (!tbl->qttbl[tbl->qtid[i]]) {          /* Check dequantizer table for this component */
                         return JDR_FMT1;                    /* Err: Not loaded */
                     }
                 }
@@ -864,13 +870,13 @@ JRESULT jd_prepare(
 
                 /* Y */
                 for (i = 0; i < n; i++) {
-                    jd->component[i].huff[0].huffbits = jd->huffbits[0][0];
-                    jd->component[i].huff[0].huffcode = jd->huffcode[0][0];
-                    jd->component[i].huff[0].huffdata = jd->huffdata[0][0];
-                    jd->component[i].huff[1].huffbits = jd->huffbits[0][1];
-                    jd->component[i].huff[1].huffcode = jd->huffcode[0][1];
-                    jd->component[i].huff[1].huffdata = jd->huffdata[0][1];
-                    jd->component[i].qttbl = jd->qttbl[jd->qtid[0]];
+                    jd->component[i].huff[0].huffbits = tbl->huffbits[0][0];
+                    jd->component[i].huff[0].huffcode = tbl->huffcode[0][0];
+                    jd->component[i].huff[0].huffdata = tbl->huffdata[0][0];
+                    jd->component[i].huff[1].huffbits = tbl->huffbits[0][1];
+                    jd->component[i].huff[1].huffcode = tbl->huffcode[0][1];
+                    jd->component[i].huff[1].huffdata = tbl->huffdata[0][1];
+                    jd->component[i].qttbl = tbl->qttbl[tbl->qtid[0]];
                     jd->component[i].dcv = &jd->dcv[0];
 
                     JD_LOG("huff[%d]", i);
@@ -879,13 +885,13 @@ JRESULT jd_prepare(
                 /* CrCb */
                 if (jd->ncomp == 3) {
                     for (i = 0; i < 2; i++) {
-                        jd->component[n + i].huff[0].huffbits = jd->huffbits[1][0];
-                        jd->component[n + i].huff[0].huffcode = jd->huffcode[1][0];
-                        jd->component[n + i].huff[0].huffdata = jd->huffdata[1][0];
-                        jd->component[n + i].huff[1].huffbits = jd->huffbits[1][1];
-                        jd->component[n + i].huff[1].huffcode = jd->huffcode[1][1];
-                        jd->component[n + i].huff[1].huffdata = jd->huffdata[1][1];
-                        jd->component[n + i].qttbl = jd->qttbl[jd->qtid[i + 1]];
+                        jd->component[n + i].huff[0].huffbits = tbl->huffbits[1][0];
+                        jd->component[n + i].huff[0].huffcode = tbl->huffcode[1][0];
+                        jd->component[n + i].huff[0].huffdata = tbl->huffdata[1][0];
+                        jd->component[n + i].huff[1].huffbits = tbl->huffbits[1][1];
+                        jd->component[n + i].huff[1].huffcode = tbl->huffcode[1][1];
+                        jd->component[n + i].huff[1].huffdata = tbl->huffdata[1][1];
+                        jd->component[n + i].qttbl = tbl->qttbl[tbl->qtid[i + 1]];
                         jd->component[n + i].dcv = &jd->dcv[i + 1];
 
                         JD_LOG("huff[%d]", n + i);
@@ -910,10 +916,14 @@ JRESULT jd_prepare(
 
                 /* Align stream read offset to JD_SZBUF */
                 if (ofs %= JD_SZBUF) {
-                    jd->dctr = jd->infunc(jd, seg + ofs, (size_t)(JD_SZBUF - ofs));
+                    jd->dctr = jd->infunc(jd, seg + ofs, (int32_t)(JD_SZBUF - ofs));
                 }
                 jd->dptr = seg + ofs - (JD_FASTDECODE ? 0 : 1);
                 JD_HEXDUMP(jd->dptr, jd->dctr);
+
+                #if JD_DEBUG
+                jd_log(jd);
+                #endif
 
                 return JDR_OK;      /* Initialization succeeded. Ready to decompress the JPEG image. */
             }
@@ -933,7 +943,7 @@ JRESULT jd_prepare(
         case 0xD9:  /* EOI */
             return JDR_FMT3;    /* Unsuppoted JPEG standard (may be progressive JPEG) */
         default:    /* Unknown segment (comment, exif or etc..) */
-            JD_LOG("Skip segment marker %02X,%lld", marker, len);
+            JD_LOG("Skip segment marker %02X,%d", marker, len);
             /* Skip segment data (null pointer specifies to remove data from the stream) */
             if (jd->infunc(jd, NULL, len) != len) {
                 return JDR_INP;
@@ -945,7 +955,7 @@ JRESULT jd_prepare(
 
 JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
 {
-    size_t dc = jd->dctr;
+    int32_t dc = jd->dctr;
     uint8_t *dp = jd->dptr;
     uint8_t last_d = 0, d = 0, dbit = 0, cnt = 0, cmp = 0, cls = 0, bl0, bl1, val, zeros;
     uint32_t dreg = 0;
@@ -1118,6 +1128,8 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
     }
 }
 
+/*-------------------------------------------------------------------------*/
+// Log
 const char *jd_code2bin(char *buf, int code, int bits)
 {
     int i;
@@ -1132,6 +1144,7 @@ const char *jd_code2bin(char *buf, int code, int bits)
 
 void jd_log(JDEC *jd)
 {
+#if JD_DEBUG
     int i, j, cls, num, total_codes;
     uint8_t *hb;
     uint16_t *hc;
@@ -1140,13 +1153,20 @@ void jd_log(JDEC *jd)
 
     int32_t *p;
 
+    JTABLE _tbl, *tbl = &_tbl;
+
+    memset(tbl, 0, sizeof(JTABLE));
+
+    /* from components to table */
+
+
     JD_LOG("\n\n---");
 
     for (cls = 0; cls < 2; cls++) {
         for (num = 0; num < 2; num++) {
-            hb = jd->huffbits[num][cls];
-            hc = jd->huffcode[num][cls];
-            hd = jd->huffdata[num][cls];
+            hb = tbl->huffbits[num][cls];
+            hc = tbl->huffcode[num][cls];
+            hd = tbl->huffdata[num][cls];
             if (hb == NULL || hc == NULL || hd == NULL) {
                 continue;
             }
@@ -1165,8 +1185,8 @@ void jd_log(JDEC *jd)
     }
 
     for (i = 0; i < 4; i++) {
-        if (jd->qttbl[i]) {
-            p = jd->qttbl[i];
+        if (tbl->qttbl[i]) {
+            p = tbl->qttbl[i];
             JD_LOG("\nQuantization Table ID: %d", i);
             JD_INTDUMP(p, 64);
         }
@@ -1177,4 +1197,5 @@ void jd_log(JDEC *jd)
 
     JD_LOG("\nZigZag:");
     JD_INTDUMP(Zig, 64);
+#endif
 }

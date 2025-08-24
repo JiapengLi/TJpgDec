@@ -4,12 +4,12 @@
 
 
 // Dummy input/output functions for TJpgDec
-size_t input_func(JDEC *jd, uint8_t *buf, size_t len) {
+int32_t input_func(JDEC *jd, uint8_t *buf, int32_t len) {
     FILE *fp = (FILE *)jd->device;
 
-    printf("rd %zu\n", len);
+    printf("rd %d\n", len);
     if (buf) {
-        return fread(buf, 1, len, fp);
+        return fread(buf, 1, (size_t)len, fp);
     } else {
         fseek(fp, len, SEEK_CUR);
         return len;
@@ -60,8 +60,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    jd_log(&jd);
-
     printf("\n\n\n");
 
     printf("Starting JPEG decompression...\n");
@@ -72,5 +70,8 @@ int main(int argc, char *argv[]) {
     }
 
     fclose(fp);
+
+    printf("sizeof(JDEC): %zu\n", sizeof(JDEC));
+
     return 0;
 }

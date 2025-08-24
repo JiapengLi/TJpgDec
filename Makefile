@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -O2 -Wformat-zero-length
+CFLAGS = -Wall -O2 -Wno-format-zero-length
 SRC = ./src
 
 BUILD_DEBUG = build-debug

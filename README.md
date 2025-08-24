@@ -11,6 +11,11 @@
 - Scale feature removed
 - Very fast single pixel extraction (skip dequantization, idct and color conversion if block is irrelevant)
 
+### Limitations
+
+- Strict 8x8 block output, even in 16x16 MCU mode
+
+
 ## TODO
 
 - to support none x8 images
