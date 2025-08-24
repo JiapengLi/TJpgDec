@@ -1,4 +1,4 @@
-*.zip
 *.o
 *.exe
-*.jpg
+images
+build-*

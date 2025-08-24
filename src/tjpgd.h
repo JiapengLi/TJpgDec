@@ -46,8 +46,6 @@ typedef enum {
     JDR_FMT4,
 } JRESULT;
 
-
-
 /* Rectangular region in the output image */
 typedef struct {
     uint16_t left;      /* Left end */
@@ -105,16 +103,14 @@ struct JDEC {
     JCOMP component[6];             /* maximum 6 components, Huffman tables for Y, Cb, Cr components */
 };
 
-
+typedef size_t (*jd_infunc_t)(JDEC *, uint8_t *, size_t);
+typedef int (*jd_outfunc_t)(JDEC *, void *, JRECT *);
 
 /* TJpgDec API functions */
-JRESULT jd_prepare(JDEC *jd, size_t (*infunc)(JDEC *, uint8_t *, size_t), void *pool, size_t sz_pool, void *dev);
-JRESULT jd_decomp(JDEC *jd, int (*outfunc)(JDEC *, void *, JRECT *), uint8_t scale);
-
-JRESULT jd_decomp2(JDEC *jd, int (*outfunc)(JDEC *, void *, JRECT *), uint8_t scale);
+JRESULT jd_prepare(JDEC *jd, jd_infunc_t infunc, void *pool, size_t sz_pool, void *dev);
+JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale);
 
 void jd_log(JDEC *jd);
-JRESULT jd_test(JDEC *jd);
 
 #ifdef __cplusplus
 }

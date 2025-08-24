@@ -61,16 +61,15 @@ int main(int argc, char *argv[]) {
     }
 
     jd_log(&jd);
-    jd_test(&jd);
 
-    // printf("\n\n\n");
+    printf("\n\n\n");
 
-    // printf("Starting JPEG decompression...\n");
-    // if (jd_decomp(&jd, output_func, 0) != JDR_OK) {
-    //     printf("Failed to decode JPEG image\n");
-    //     fclose(fp);
-    //     return 1;
-    // }
+    printf("Starting JPEG decompression...\n");
+    if (jd_decomp(&jd, output_func, 0) != JDR_OK) {
+        printf("Failed to decode JPEG image\n");
+        fclose(fp);
+        return 1;
+    }
 
     fclose(fp);
     return 0;

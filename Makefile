@@ -1,18 +1,48 @@
 CC = gcc
 CFLAGS = -Wall -O2 -Wformat-zero-length
 SRC = ./src
-OBJS = $(SRC)/tjpgd.o main.o
 
-all: jpeg_decode
+BUILD_DEBUG = build-debug
+BUILD_RELEASE = build-release
 
-jpeg_decode: $(OBJS)
-	$(CC) $(CFLAGS) -o jpeg_decode $(OBJS)
+SRCS = main.c $(SRC)/tjpgd.c
 
-main.o: main.c
-	$(CC) $(CFLAGS) -I $(SRC) -c main.c
+OBJS_DEBUG = $(addprefix $(BUILD_DEBUG)/,$(notdir $(SRCS:.c=.o)))
+OBJS_RELEASE = $(addprefix $(BUILD_RELEASE)/,$(notdir $(SRCS:.c=.o)))
 
-$(SRC)/tjpgd.o: $(SRC)/tjpgd.c $(SRC)/tjpgd.h $(SRC)/tjpgdcnf.h
-	$(CC) $(CFLAGS) -c $(SRC)/tjpgd.c -o $(SRC)/tjpgd.o
+all: jpeg_decode_debug jpeg_decode
+
+# -----------------------------
+# Debug
+# -----------------------------
+jpeg_decode_debug: CFLAGS += -DJD_DEBUG=1
+jpeg_decode_debug: $(OBJS_DEBUG)
+	@mkdir -p $(BUILD_DEBUG)
+	$(CC) $(CFLAGS) -o $@ $(OBJS_DEBUG)
+
+$(BUILD_DEBUG)/%.o: $(SRC)/%.c $(SRC)/tjpgd.h $(SRC)/tjpgdcnf.h
+	@mkdir -p $(BUILD_DEBUG)
+	$(CC) $(CFLAGS) -DJD_DEBUG=1 -I $(SRC) -c $< -o $@
+
+$(BUILD_DEBUG)/main.o: main.c
+	@mkdir -p $(BUILD_DEBUG)
+	$(CC) $(CFLAGS) -DJD_DEBUG=1 -I $(SRC) -c $< -o $@
+
+# -----------------------------
+# Release
+# -----------------------------
+jpeg_decode: CFLAGS += -DJD_DEBUG=0
+jpeg_decode: $(OBJS_RELEASE)
+	@mkdir -p $(BUILD_RELEASE)
+	$(CC) $(CFLAGS) -o $@ $(OBJS_RELEASE)
+
+$(BUILD_RELEASE)/%.o: $(SRC)/%.c $(SRC)/tjpgd.h $(SRC)/tjpgdcnf.h
+	@mkdir -p $(BUILD_RELEASE)
+	$(CC) $(CFLAGS) -DJD_DEBUG=0 -I $(SRC) -c $< -o $@
+
+$(BUILD_RELEASE)/main.o: main.c
+	@mkdir -p $(BUILD_RELEASE)
+	$(CC) $(CFLAGS) -DJD_DEBUG=0 -I $(SRC) -c $< -o $@
 
 clean:
-	rm -f *.o $(SRC)/*.o jpeg_decode
+	rm -rf $(BUILD_DEBUG) $(BUILD_RELEASE)

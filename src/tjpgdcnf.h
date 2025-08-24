@@ -80,7 +80,9 @@
 #define TJPGD_WORKSPACE_SIZE (3500 + 6144)
 #endif
 
-#define JD_DEBUG                        1
+#ifndef JD_DEBUG
+#   define JD_DEBUG                        1
+#endif
 
 #if JD_DEBUG
 #include <stdio.h>
@@ -109,4 +111,6 @@
 #else
 #define JD_LOG(x...)                do {} while(0)
 #define JD_HEXDUMP(x, y)            do {} while(0)
+#define JD_INTDUMP(x, y)            do {} while(0)
+#define JD_RGBDUMP(x, y)            do {} while(0)
 #endif

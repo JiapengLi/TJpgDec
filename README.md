@@ -8,6 +8,8 @@
 - Lower RAM memory footprint, but use more ROM (which means more features)
     - single copy jd->workbuf, maximum 4*64 bytes
     - support very small cache jd->inbuf (minimum several bytes, bufferless)
+- Scale feature removed
+- Very fast single pixel extraction (skip dequantization, idct and color conversion if block is irrelevant)
 
 ## TODO
 
@@ -16,9 +18,6 @@
 - optimize for ARM or RISC-V architectures
 - memory optimize
 - random access to jpeg file?
-
-
-
 
 ## Build
 
