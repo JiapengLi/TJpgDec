@@ -91,7 +91,7 @@ int output_func(JDEC *jd, void *bitmap, JRECT *rect)
 int main(int argc, char *argv[])
 {
     if (argc < 2) {
-        printf("Usage: %s <jpg_file>\n", argv[0]);
+        printf("Usage: %s <jpg_file>, \n", argv[0]);
         return 1;
     }
 
@@ -106,6 +106,23 @@ int main(int argc, char *argv[])
     JRESULT res;
 
     JCOLOR color;
+    JRECT *rect = NULL, _rect;
+
+    if (argc > 3) {
+        int x, y, w, h;
+        int ret = sscanf(argv[3], "%d,%d,%d,%d", &x, &y, &w, &h);
+        if (ret == 4) {
+            _rect.left = x;
+            _rect.top = y;
+            _rect.right = x + w - 1;
+            _rect.bottom = y + h - 1;
+            rect = &_rect;
+        } else {
+            fprintf(stderr, "Invalid rectangle format: %s\n", argv[3]);
+            fclose(fp);
+            return 1;
+        }
+    }
 
     if (argc > 2) {
         if (strcmp(argv[2], "grayscale") == 0) {
@@ -144,7 +161,7 @@ int main(int argc, char *argv[])
     printf("\n\n\n");
 
     printf("Starting JPEG decompression...\n");
-    if (jd_decomp(&jd, output_func, 0) != JDR_OK) {
+    if (jd_decomp_rect(&jd, output_func, rect) != JDR_OK) {
         printf("Failed to decode JPEG image\n");
         fclose(fp);
         return 1;

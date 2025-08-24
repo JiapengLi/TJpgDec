@@ -574,13 +574,34 @@ static const jd_yuv_fmt_t jd_yuv_fmt_tab[] = {
     yuv_to_bgra8888,
 };
 
-void yuv444_scan(JDEC *jd, uint16_t x, uint16_t y)
+void yuv400_scan(JDEC *jd, JRECT *mcu_rect, JRECT *tgt_rect)
+{
+    uint8_t *pix;
+    jd_yuv_t *py;
+    int yy, cb = 0, cr = 0;
+
+    /* Build a RGB MCU from discrete comopnents */
+    pix = (uint8_t *)jd->workbuf;
+    py = jd->mcubuf;
+    for (unsigned int iy = 0; iy < 8; iy++) {
+        for (unsigned int ix = 0; ix < 8; ix++) {
+            yy = *py++;   /* Get Y component */
+            jd->yuv_fmt(&pix, yy, cb, cr);
+        }
+    }
+
+    jd->outfunc(jd, jd->workbuf, mcu_rect);
+
+    // JD_LOG("RGB888:");
+    // pix = (uint8_t *)jd->workbuf;
+    // JD_RGBDUMP(pix, 3 * 64);
+}
+
+void yuv444_scan(JDEC *jd, JRECT *mcu_rect, JRECT *tgt_rect)
 {
     uint8_t *pix = (uint8_t *)jd->workbuf;
     jd_yuv_t *py, *pcb, *pcr;
     int yy, cb, cr;
-
-    JRECT rect;
 
     /* In YUV444, each pixel has its own Y, Cb, Cr values */
     py  = jd->mcubuf;        // Y block start
@@ -598,19 +619,15 @@ void yuv444_scan(JDEC *jd, uint16_t x, uint16_t y)
     }
 
     /* output */
-    rect.left = x;
-    rect.top = y;
-    rect.right = rect.left + 8 - 1;
-    rect.bottom = rect.top + 8 - 1;
-    jd->outfunc(jd, jd->workbuf, &rect);
+    jd->outfunc(jd, jd->workbuf, mcu_rect);
 
-    JD_LOG("RGB888 (YUV444):");
-    pix = (uint8_t *)jd->workbuf;
-    JD_RGBDUMP(pix, 3 * 64);
+    // JD_LOG("RGB888 (YUV444):");
+    // pix = (uint8_t *)jd->workbuf;
+    // JD_RGBDUMP(pix, 3 * 64);
 }
 
 
-void yuv422_scan(JDEC *jd, uint16_t x, uint16_t y)
+void yuv422_scan(JDEC *jd, JRECT *mcu_rect, JRECT *tgt_rect)
 {
     int iy, ix, icmp;
     jd_yuv_t *py, *pcb, *pcr;
@@ -634,6 +651,15 @@ void yuv422_scan(JDEC *jd, uint16_t x, uint16_t y)
         y_block_col = (icmp & 1) << 3;  // 0 or 8
         y_block_row = 0;                // Only one row of Y blocks
 
+        rect.left = mcu_rect->left + y_block_col;
+        rect.top = mcu_rect->top + y_block_row;
+        rect.right = rect.left + 8 - 1;
+        rect.bottom = rect.top + 8 - 1;
+
+        if ((tgt_rect != NULL) && !is_rect_intersect(&rect, tgt_rect)) {
+            continue;   // Skip this block if it does not intersect with the target rectangle
+        }
+
         for (iy = 0; iy < 8; iy++) {
             for (ix = 0; ix < 8; ix++) {
                 int x_abs = y_block_col + ix;
@@ -650,48 +676,15 @@ void yuv422_scan(JDEC *jd, uint16_t x, uint16_t y)
             }
         }
 
-        rect.left = x + y_block_col;
-        rect.top = y + y_block_row;
-        rect.right = rect.left + 8 - 1;
-        rect.bottom = rect.top + 8 - 1;
         jd->outfunc(jd, jd->workbuf, &rect);
 
-        JD_LOG("RGB888 (YUV422):");
-        pix = (uint8_t *)jd->workbuf;
-        JD_RGBDUMP(pix, 3 * 64);
+        // JD_LOG("RGB888 (YUV422):");
+        // pix = (uint8_t *)jd->workbuf;
+        // JD_RGBDUMP(pix, 3 * 64);
     }
 }
 
-void yuv400_scan(JDEC *jd, uint16_t x, uint16_t y)
-{
-    uint8_t *pix;
-    jd_yuv_t *py;
-    int yy, cb = 0, cr = 0;
-
-    JRECT rect;
-
-    /* Build a RGB MCU from discrete comopnents */
-    pix = (uint8_t *)jd->workbuf;
-    py = jd->mcubuf;
-    for (unsigned int iy = 0; iy < 8; iy++) {
-        for (unsigned int ix = 0; ix < 8; ix++) {
-            yy = *py++;   /* Get Y component */
-            jd->yuv_fmt(&pix, yy, cb, cr);
-        }
-    }
-
-    rect.left = x;
-    rect.top = y;
-    rect.right = rect.left + 8 - 1;
-    rect.bottom = rect.top + 8 - 1;
-    jd->outfunc(jd, jd->workbuf, &rect);
-
-    JD_LOG("RGB888:");
-    pix = (uint8_t *)jd->workbuf;
-    JD_RGBDUMP(pix, 3 * 64);
-}
-
-void yuv420_scan(JDEC *jd, uint16_t x, uint16_t y)
+void yuv420_scan(JDEC *jd, JRECT *mcu_rect, JRECT *tgt_rect)
 {
     int iy, ix, icmp;
     jd_yuv_t *py, *pcb, *pcr;
@@ -714,6 +707,15 @@ void yuv420_scan(JDEC *jd, uint16_t x, uint16_t y)
         y_block_col = (icmp & 1) << 3;
         y_block_row = (icmp >> 1) << 3;
 
+        rect.left = mcu_rect->left + y_block_col;
+        rect.top = mcu_rect->top + y_block_row;
+        rect.right = rect.left + 8 - 1;
+        rect.bottom = rect.top + 8 - 1;
+
+        if ((tgt_rect != NULL) && !is_rect_intersect(&rect, tgt_rect)) {
+            continue;   // Skip this block if it does not intersect with the target rectangle
+        }
+
         for (iy = 0; iy < 8; iy++) {
             for (ix = 0; ix < 8; ix++) {
                 int x_abs = y_block_col + ix;
@@ -728,19 +730,15 @@ void yuv420_scan(JDEC *jd, uint16_t x, uint16_t y)
             }
         }
 
-        rect.left = x + y_block_col;
-        rect.top = y + y_block_row;
-        rect.right = rect.left + 8 - 1;
-        rect.bottom = rect.top + 8 - 1;
         jd->outfunc(jd, jd->workbuf, &rect);
 
-        JD_LOG("RGB888:");
-        pix = (uint8_t *)jd->workbuf;
-        JD_RGBDUMP(pix, 3 * 64);
+        // JD_LOG("RGB888:");
+        // pix = (uint8_t *)jd->workbuf;
+        // JD_RGBDUMP(pix, 3 * 64);
     }
 }
 
-JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp, uint16_t x, uint16_t y)
+JRESULT jd_output(JDEC *jd, uint8_t n_cmp, JRECT *mcu_rect, JRECT *tgt_rect)
 {
     int cmp, i;
     JCOMP *component;
@@ -750,10 +748,8 @@ JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp, uint16_t x, uint16_
     /* dequantize && idct */
     for (cmp = 0; cmp < n_cmp; cmp++) {
         component = &jd->component[cmp];
-        p = &jd->mcubuf[cmp * 64];
+        p = &jd->mcubuf[cmp << 6];      // cmp * 64
         JD_LOG("Component %d:", cmp);
-        JD_LOG("P:");
-        JD_INTDUMP(p, 64);
         for (i = 0; i < 64; i++) {
             if (p[i]) {
                 tmp[i] = p[i] * component->qttbl[i] >> 8;
@@ -764,12 +760,12 @@ JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp, uint16_t x, uint16_
         JD_LOG("TMP:");
         JD_INTDUMP(tmp, 64);
         block_idct(tmp, p);
-        JD_LOG("P:");
+        JD_LOG("  P:");
         JD_INTDUMP(p, 64);
     }
 
     /* scan & output */
-    jd->yuv_scan(jd, x, y);
+    jd->yuv_scan(jd, mcu_rect, tgt_rect);
 
     return JDR_OK;
 }
@@ -1037,7 +1033,7 @@ JRESULT jd_prepare(
     }
 }
 
-JRESULT jd_decomp_rect(JDEC *jd, jd_outfunc_t outfunc, JRECT *rect)
+JRESULT jd_decomp_rect(JDEC *jd, jd_outfunc_t outfunc, JRECT *tgt_rect)
 {
     int32_t dc = jd->dctr;
     uint8_t *dp = jd->dptr;
@@ -1047,6 +1043,7 @@ JRESULT jd_decomp_rect(JDEC *jd, jd_outfunc_t outfunc, JRECT *rect)
     uint8_t bits_threshold = 15, n_y, n_cmp;
     int x = 0, y = 0;
     bool next_huff = true;
+    JRECT _mcu_rect, *mcu_rect = &_mcu_rect;
 
     JCOMP *component = &jd->component[cmp];
     jd_yuv_t *mcubuf = &jd->mcubuf[cmp << 6];   // cmp * 64
@@ -1191,18 +1188,22 @@ JRESULT jd_decomp_rect(JDEC *jd, jd_outfunc_t outfunc, JRECT *rect)
                     cmp++;
                     if (cmp >= n_cmp) {
                         cmp = 0;
-                        if (rect == NULL) {
-                            jd_output(jd, jd->mcubuf, n_cmp, x, y);
+
+                        mcu_rect->left = x;
+                        mcu_rect->top = y;
+                        mcu_rect->right = x + (jd->msx << 3) - 1;
+                        mcu_rect->bottom = y + (jd->msy << 3) - 1;
+                        if (tgt_rect == NULL) {
+                            jd_output(jd, n_cmp, mcu_rect, tgt_rect);
                         } else {
-                            JRECT mcu_rect;
-                            mcu_rect.left = x;
-                            mcu_rect.top = y;
-                            mcu_rect.right = x + (jd->msx << 3);
-                            mcu_rect.bottom = y + (jd->msy << 3);
-                            if (is_rect_intersect(rect, &mcu_rect)) {
-                                jd_output(jd, jd->mcubuf, n_cmp, x, y);
+                            if (is_rect_intersect(tgt_rect, mcu_rect)) {
+                                JD_LOG("MCU intersects with output rectangle (%u,%u,%u,%u) (%u,%u,%u,%u)\n",
+                                       mcu_rect->left, mcu_rect->top, mcu_rect->right, mcu_rect->bottom,
+                                       tgt_rect->left, tgt_rect->top, tgt_rect->right, tgt_rect->bottom);
+                                jd_output(jd, n_cmp, mcu_rect, tgt_rect);
                             }
                         }
+
                         x += jd->msx << 3;
                         if (x >= jd->width) {
                             x = 0;
