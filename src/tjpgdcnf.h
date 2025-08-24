@@ -1,6 +1,21 @@
-/*----------------------------------------------*/
-/* TJpgDec System Configurations R0.03          */
-/*----------------------------------------------*/
+/*----------------------------------------------------------------------------/
+/ TJpgDec - Tiny JPEG Decompressor
+/-----------------------------------------------------------------------------/
+/ The TJpgDec is a generic JPEG decompressor module for tiny embedded systems.
+/ This is a free software that opened for education, research and commercial
+/  developments under license policy of following terms.
+/
+/  Copyright (C) 2021, ChaN, all right reserved.
+/  Copyright (C) 2025, JiapengLi, all right reserved.
+/
+/ * The TJpgDec module is a free software and there is NO WARRANTY.
+/ * No restriction on use. You can use, modify and redistribute it for
+/   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
+/ * Redistributions of source code must retain the above copyright notice.
+/
+/----------------------------------------------------------------------------*/
+#ifndef DEF_TJPGDCNF
+#define DEF_TJPGDCNF
 
 /* Specifies size of stream input buffer */
 #ifndef JD_SZBUF
@@ -61,4 +76,6 @@
 #define JD_HEXDUMP(x, y)            do {} while(0)
 #define JD_INTDUMP(x, y)            do {} while(0)
 #define JD_RGBDUMP(x, y)            do {} while(0)
+#endif
+
 #endif

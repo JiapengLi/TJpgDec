@@ -1,29 +1,18 @@
 /*----------------------------------------------------------------------------/
-/ TJpgDec - Tiny JPEG Decompressor R0.03                      (C)ChaN, 2021
+/ TJpgDec - Tiny JPEG Decompressor
 /-----------------------------------------------------------------------------/
 / The TJpgDec is a generic JPEG decompressor module for tiny embedded systems.
 / This is a free software that opened for education, research and commercial
 /  developments under license policy of following terms.
 /
 /  Copyright (C) 2021, ChaN, all right reserved.
+/  Copyright (C) 2025, JiapengLi, all right reserved.
 /
 / * The TJpgDec module is a free software and there is NO WARRANTY.
 / * No restriction on use. You can use, modify and redistribute it for
 /   personal, non-profit or commercial products UNDER YOUR RESPONSIBILITY.
 / * Redistributions of source code must retain the above copyright notice.
 /
-/-----------------------------------------------------------------------------/
-/ Oct 04, 2011 R0.01  First release.
-/ Feb 19, 2012 R0.01a Fixed decompression fails when scan starts with an escape seq.
-/ Sep 03, 2012 R0.01b Added JD_TBLCLIP option.
-/ Mar 16, 2019 R0.01c Supprted stdint.h.
-/ Jul 01, 2020 R0.01d Fixed wrong integer type usage.
-/ May 08, 2021 R0.02  Supprted grayscale image. Separated configuration options.
-/ Jun 11, 2021 R0.02a Some performance improvement.
-/ Jul 01, 2021 R0.03  Added JD_FASTDECODE option.
-/                     Some performance improvement.
-/ Mar 10, 2025 R0.03r Added JD_USE_INTERNAL_32BIT_PIXEL option to support ARGB8888.
-/                     Added JD_SWAP_RED_AND_BLUE option.
 /----------------------------------------------------------------------------*/
 
 #include "tjpgd.h"
@@ -185,9 +174,6 @@ static void *alloc_pool(  /* Pointer to allocated memory block (NULL:no memory a
 
     return (void *)rp;  /* Return allocated memory block (NULL:no memory to allocate) */
 }
-
-
-
 
 /*-----------------------------------------------------------------------*/
 /* Create de-quantization and prescaling tables with a DQT segment       */
