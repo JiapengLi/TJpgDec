@@ -32,13 +32,13 @@ typedef uint8_t jd_yuv_t;
 #endif
 
 typedef enum {
-    JD_GRAYSCALE,
-    JD_RGB888,
-    JD_BGR888,
-    JD_RGB565,
-    JD_BGR565,
-    JD_RGBA8888,
-    JD_BGRA8888,
+    JD_GRAYSCALE    = 0,
+    JD_RGB565       = 1,
+    JD_BGR565       = 2,
+    JD_RGB888       = 3,
+    JD_BGR888       = 4,
+    JD_RGBA8888     = 5,
+    JD_BGRA8888     = 6,
 } JCOLOR;
 
 /* Error code */
@@ -53,6 +53,7 @@ typedef enum {
     JDR_FMT2,   /* 7: Right format but not supported */
     JDR_FMT3,   /* 8: Not supported JPEG standard */
     JDR_FMT4,
+    JDR_YUV,
 } JRESULT;
 
 /* Rectangular region in the output image */
@@ -78,6 +79,8 @@ typedef struct {
 typedef struct JDEC JDEC;
 typedef int32_t (*jd_infunc_t)(JDEC *, uint8_t *, int32_t);
 typedef int (*jd_outfunc_t)(JDEC *, void *, JRECT *);
+typedef void (*jd_yuv_scan_t)(JDEC *);
+typedef void (*jd_yuv_fmt_t)(uint8_t **pix, int yy, int cb, int cr);
 
 typedef struct JTABLE {
     uint8_t *huffbits[2][2];    /* Huffman bit distribution tables [id][dcac] */
@@ -95,8 +98,8 @@ struct JDEC {
 
     uint8_t msx, msy;           /* MCU size in unit of block (width, height) */
     uint8_t ncomp;              /* Number of color components 1:grayscale, 3:color */
-    uint8_t blocks_per_mcu;     /* Number of blocks per MCU */
-    uint16_t nrst;              /* Restart inverval */
+    uint8_t color;              /* Output color space */
+    uint16_t nrst;              /* Restart interval */
     uint16_t width, height;     /* Size of the input image (pixel) */
     int16_t dcv[3];             /* Previous DC element of each component */
     JCOMP component[6];         /* maximum 6 components, Huffman tables for Y, Cb, Cr components */
@@ -113,6 +116,10 @@ struct JDEC {
     void *pool;                 /* Pointer to available memory pool */
     int32_t sz_pool;            /* Size of memory pool (bytes available) */
 
+    jd_yuv_fmt_t yuv_fmt;
+    jd_yuv_scan_t yuv_scan;
+
+    jd_outfunc_t outfunc;
     jd_infunc_t infunc;         /* Pointer to jpeg stream input function */
     void *device;               /* Pointer to I/O device identifier for the session */
 };

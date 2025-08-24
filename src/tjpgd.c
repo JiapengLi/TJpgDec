@@ -487,42 +487,83 @@ int jd_get_hc(JHUFF *huff, uint32_t dreg, uint8_t dbit, uint8_t *val)
     return 0;
 }
 
-int yuv_to_gray(void *buf, int yy, int cb, int cr)
+// YUV → Grayscale (1 byte)
+void yuv_to_grayscale(uint8_t **pix, int yy, int cb, int cr)
 {
-    return 1;
+    *(*pix)++ = (uint8_t)yy;  // Just use Y channel
 }
 
-int yuv_to_rgb888(void *buf, int yy, int cb, int cr)
+// YUV → RGB888 (R, G, B)
+void yuv_to_rgb888(uint8_t **pix, int yy, int cb, int cr)
 {
-    return 3;
+    *(*pix)++ = ycbcr2r(yy, cb, cr);
+    *(*pix)++ = ycbcr2g(yy, cb, cr);
+    *(*pix)++ = ycbcr2b(yy, cb, cr);
 }
 
-int yuv_to_bgr888(void *buf, int yy, int cb, int cr)
+// YUV → BGR888 (B, G, R)
+void yuv_to_bgr888(uint8_t **pix, int yy, int cb, int cr)
 {
-    return 3;
+    *(*pix)++ = ycbcr2b(yy, cb, cr);
+    *(*pix)++ = ycbcr2g(yy, cb, cr);
+    *(*pix)++ = ycbcr2r(yy, cb, cr);
 }
 
-int yuv_to_rgb565(void *buf, int yy, int cb, int cr)
+// YUV → RGB565 (2 bytes)
+void yuv_to_rgb565(uint8_t **pix, int yy, int cb, int cr)
 {
-    return 2;
+    uint8_t r = ycbcr2r(yy, cb, cr);
+    uint8_t g = ycbcr2g(yy, cb, cr);
+    uint8_t b = ycbcr2b(yy, cb, cr);
+
+    uint16_t rgb = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+
+    *(*pix)++ = rgb & 0xFF;
+    *(*pix)++ = (rgb >> 8) & 0xFF;
 }
 
-int yuv_to_bgr565(void *buf, int yy, int cb, int cr)
+// YUV → BGR565 (2 bytes)
+void yuv_to_bgr565(uint8_t **pix, int yy, int cb, int cr)
 {
-    return 3;
+    uint8_t r = ycbcr2r(yy, cb, cr);
+    uint8_t g = ycbcr2g(yy, cb, cr);
+    uint8_t b = ycbcr2b(yy, cb, cr);
+
+    uint16_t bgr = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | (r >> 3);
+
+    *(*pix)++ = bgr & 0xFF;
+    *(*pix)++ = (bgr >> 8) & 0xFF;
 }
 
-int yuv_to_argb888(void *buf, int yy, int cb, int cr)
+// YUV → RGBA8888 (R, G, B, A)
+void yuv_to_rgba8888(uint8_t **pix, int yy, int cb, int cr)
 {
-    return 4;
+    *(*pix)++ = ycbcr2r(yy, cb, cr);
+    *(*pix)++ = ycbcr2g(yy, cb, cr);
+    *(*pix)++ = ycbcr2b(yy, cb, cr);
+    *(*pix)++ = 0xFF;  // Alpha channel
 }
 
-int yuv_to_abgr888(void *buf, int yy, int cb, int cr)
+// YUV → BGRA888 (B, G, R, A)
+void yuv_to_bgra8888(uint8_t **pix, int yy, int cb, int cr)
 {
-    return 4;
+    *(*pix)++ = ycbcr2b(yy, cb, cr);
+    *(*pix)++ = ycbcr2g(yy, cb, cr);
+    *(*pix)++ = ycbcr2r(yy, cb, cr);
+    *(*pix)++ = 0xFF;  // Alpha channel
 }
 
-void yuv444_to_rgb888(JDEC *jd)
+static const jd_yuv_fmt_t jd_yuv_fmt_tab[] = {
+    yuv_to_grayscale,
+    yuv_to_rgb565,
+    yuv_to_bgr565,
+    yuv_to_rgb888,
+    yuv_to_bgr888,
+    yuv_to_rgba8888,
+    yuv_to_bgra8888,
+};
+
+void yuv444_scan(JDEC *jd)
 {
     uint8_t *pix = (uint8_t *)jd->workbuf;
     jd_yuv_t *py, *pcb, *pcr;
@@ -539,9 +580,7 @@ void yuv444_to_rgb888(JDEC *jd)
             cb = *pcb++ - 128;
             cr = *pcr++ - 128;
 
-            *pix++ = ycbcr2r(yy, cb, cr);
-            *pix++ = ycbcr2g(yy, cb, cr);
-            *pix++ = ycbcr2b(yy, cb, cr);
+            jd->yuv_fmt(&pix, yy, cb, cr);
         }
     }
 
@@ -551,7 +590,7 @@ void yuv444_to_rgb888(JDEC *jd)
 }
 
 
-void yuv422_to_rgb888(JDEC *jd)
+void yuv422_scan(JDEC *jd)
 {
     int iy, ix, icmp;
     jd_yuv_t *py, *pcb, *pcr;
@@ -585,9 +624,7 @@ void yuv422_to_rgb888(JDEC *jd)
                 cb = pcb[uv_idx] - 128;
                 cr = pcr[uv_idx] - 128;
 
-                *pix++ = ycbcr2r(yy, cb, cr);
-                *pix++ = ycbcr2g(yy, cb, cr);
-                *pix++ = ycbcr2b(yy, cb, cr);
+                jd->yuv_fmt(&pix, yy, cb, cr);
             }
         }
 
@@ -597,7 +634,7 @@ void yuv422_to_rgb888(JDEC *jd)
     }
 }
 
-void yuv400_to_rgb888(JDEC *jd)
+void yuv400_scan(JDEC *jd)
 {
     uint8_t *pix;
     jd_yuv_t *py;
@@ -609,9 +646,7 @@ void yuv400_to_rgb888(JDEC *jd)
     for (unsigned int iy = 0; iy < 8; iy++) {
         for (unsigned int ix = 0; ix < 8; ix++) {
             yy = *py++;   /* Get Y component */
-            *pix++ = ycbcr2r(yy, cb, cr);
-            *pix++ = ycbcr2g(yy, cb, cr);
-            *pix++ = ycbcr2b(yy, cb, cr);
+            jd->yuv_fmt(&pix, yy, cb, cr);
         }
     }
 
@@ -620,7 +655,7 @@ void yuv400_to_rgb888(JDEC *jd)
     JD_RGBDUMP(pix, 3 * 64);
 }
 
-void yuv420_to_rgb888(JDEC *jd)
+void yuv420_scan(JDEC *jd)
 {
     int iy, ix, icmp;
     jd_yuv_t *py, *pcb, *pcr;
@@ -651,9 +686,7 @@ void yuv420_to_rgb888(JDEC *jd)
                 cb = pcb[uv_idx] - 128;
                 cr = pcr[uv_idx] - 128;
 
-                *pix++ = ycbcr2r(yy, cb, cr);
-                *pix++ = ycbcr2g(yy, cb, cr);
-                *pix++ = ycbcr2b(yy, cb, cr);
+                jd->yuv_fmt(&pix, yy, cb, cr);
             }
         }
 
@@ -670,6 +703,7 @@ JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
     jd_yuv_t *p;
     int32_t *tmp = (int32_t *)jd->workbuf;
 
+    /* dequantize && idct */
     for (cmp = 0; cmp < n_cmp; cmp++) {
         component = &jd->component[cmp];
         p = &jd->mcubuf[cmp * 64];
@@ -690,16 +724,8 @@ JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
         JD_INTDUMP(p, 64);
     }
 
-    /* Convert to RGB */
-    if ((jd->ncomp == 1) && (jd->msx == 1) && (jd->msy == 1)) {
-        yuv400_to_rgb888(jd);
-    } else if ((jd->ncomp == 3) && (jd->msx == 1) && (jd->msy == 1)) {
-        yuv444_to_rgb888(jd);
-    } else if ((jd->ncomp == 3) && (jd->msx == 2) && (jd->msy == 2)) {
-        yuv420_to_rgb888(jd);
-    } else if ((jd->ncomp == 3) && (jd->msx == 2) && (jd->msy == 1)) {
-        yuv422_to_rgb888(jd);
-    }
+    /* scan && output */
+    jd->yuv_scan(jd);
 
     return JDR_OK;
 }
@@ -918,6 +944,22 @@ JRESULT jd_prepare(
                 jd->dptr = seg + ofs - (JD_FASTDECODE ? 0 : 1);
                 JD_HEXDUMP(jd->dptr, jd->dctr);
 
+                /* Convert to RGB */
+                if ((jd->ncomp == 1) && (jd->msx == 1) && (jd->msy == 1)) {
+                    jd->yuv_scan = yuv400_scan;
+                } else if ((jd->ncomp == 3) && (jd->msx == 1) && (jd->msy == 1)) {
+                    jd->yuv_scan = yuv444_scan;
+                } else if ((jd->ncomp == 3) && (jd->msx == 2) && (jd->msy == 2)) {
+                    jd->yuv_scan = yuv420_scan;
+                } else if ((jd->ncomp == 3) && (jd->msx == 2) && (jd->msy == 1)) {
+                    jd->yuv_scan = yuv422_scan;
+                } else {
+                    return JDR_YUV;
+                }
+
+                /* default Color format */
+                jd->yuv_fmt = jd_yuv_fmt_tab[JD_RGB888];
+
 #if JD_DEBUG
                 jd_log(jd);
 #endif
@@ -976,6 +1018,8 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
     memset(mcubuf + 1, 0, 63 * sizeof(jd_yuv_t));
 
     total_mcus = (jd->width + 8 * jd->msx - 1) / (8 * jd->msx) * ((jd->height + 8 * jd->msy - 1) / (8 * jd->msy));
+
+    jd->outfunc = outfunc;
 
     /* n_y: 1, 2, 4, ncomp: 1, 3 */
     while (1) {
@@ -1104,7 +1148,7 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
                     block_id++;
                     cmp++;
                     if (cmp >= n_cmp) {
-                        /* TODO: dequantize -> idct -> output */
+
                         jd_output(jd, jd->mcubuf, n_cmp);
 
                         cmp = 0;
