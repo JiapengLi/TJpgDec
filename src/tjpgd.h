@@ -127,7 +127,9 @@ struct JDEC {
 /* TJpgDec API functions */
 JRESULT jd_prepare(JDEC *jd, jd_infunc_t infunc, void *pool, int32_t sz_pool, void *dev);
 JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale);
+
 JRESULT jd_set_color(JDEC *jd, JCOLOR color);
+JRESULT jd_decomp_rect(JDEC *jd, jd_outfunc_t outfunc, JRECT *rect);
 
 #ifdef __cplusplus
 }

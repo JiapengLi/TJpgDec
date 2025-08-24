@@ -152,6 +152,17 @@ static inline uint8_t ycbcr2b(int Y, int Cb, int Cr)
 
 #define LDB_WORD(ptr)       (uint16_t)(((uint16_t)*((uint8_t*)(ptr))<<8)|(uint16_t)*(uint8_t*)((ptr)+1))
 
+static inline bool is_rect_intersect(const JRECT *r1, const JRECT *r2) {
+    if (r1->right < r2->left || r2->right < r1->left) {
+        return false;
+    }
+    if (r1->bottom < r2->top || r2->bottom < r1->top) {
+        return false;
+    }
+    return true;
+}
+
+
 /*-----------------------------------------------------------------------*/
 /* Allocate a memory block from memory pool                              */
 /*-----------------------------------------------------------------------*/
@@ -1026,7 +1037,7 @@ JRESULT jd_prepare(
     }
 }
 
-JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
+JRESULT jd_decomp_rect(JDEC *jd, jd_outfunc_t outfunc, JRECT *rect)
 {
     int32_t dc = jd->dctr;
     uint8_t *dp = jd->dptr;
@@ -1180,9 +1191,18 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
                     cmp++;
                     if (cmp >= n_cmp) {
                         cmp = 0;
-
-                        jd_output(jd, jd->mcubuf, n_cmp, x, y);
-
+                        if (rect == NULL) {
+                            jd_output(jd, jd->mcubuf, n_cmp, x, y);
+                        } else {
+                            JRECT mcu_rect;
+                            mcu_rect.left = x;
+                            mcu_rect.top = y;
+                            mcu_rect.right = x + (jd->msx << 3);
+                            mcu_rect.bottom = y + (jd->msy << 3);
+                            if (is_rect_intersect(rect, &mcu_rect)) {
+                                jd_output(jd, jd->mcubuf, n_cmp, x, y);
+                            }
+                        }
                         x += jd->msx << 3;
                         if (x >= jd->width) {
                             x = 0;
@@ -1202,6 +1222,11 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
             }
         }
     }
+}
+
+JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
+{
+    return jd_decomp_rect(jd, outfunc, NULL);
 }
 
 JRESULT jd_set_color(JDEC *jd, JCOLOR color)
