@@ -5,14 +5,15 @@
 
 ## Overview
 
-This project is an enhanced variant of the original [TJpgDec](https://elm-chan.org/fsw/tjpgd/) by ChaN, specifically optimized for 32-bit microcontrollers. It features runtime-configurable color modes, significantly reduced RAM usage, and support for multiple output color formats, making it ideal for resource-constrained embedded systems.
+This project is an enhanced variant of the original [TJpgDec](https://elm-chan.org/fsw/tjpgd/) by ChaN, specifically optimized for 32-bit microcontrollers. **The primary innovation is targeted rectangular decoding** - the ability to decode only a specific region of a JPEG image, dramatically reducing memory usage and processing time for embedded applications.
 
 ### Key Features
 
-- **Memory Efficient**: Minimal RAM footprint with configurable buffer sizes
-- **Color Flexibility**: Runtime-configurable output formats (7 color modes supported)
-- **Performance Optimized**: Fast single pixel extraction with selective processing
-- **MCU Targeted**: Designed specifically for 32-bit embedded systems
+- **Targeted Rectangular Decoding** - Decode only the region you need, not the entire image
+- **Memory Efficient** - Minimal RAM footprint with configurable buffer sizes
+- **Color Flexibility** - Runtime-configurable output formats (7 color modes supported)
+- **Performance Optimized** - Fast single pixel extraction with selective processing
+- **MCU Targeted** - Designed specifically for 32-bit embedded systems
 
 ## Technical Differences from Original TJpgDec
 
@@ -27,6 +28,34 @@ This project is an enhanced variant of the original [TJpgDec](https://elm-chan.o
 - **Fast single pixel extraction** - Skips dequantization, IDCT, and color conversion for irrelevant MCU/blocks
 - **Streamlined API** - Single entry point for buffer loading
 - **Reduced macro complexity** - Fewer configuration macros required
+
+### Targeted Rectangular Decoding (Core Feature)
+
+**The most significant enhancement**: Decode only specific rectangular regions of JPEG images instead of the entire image.
+
+#### Benefits
+- **Massive Memory Savings** - Only process pixels within your region of interest
+- **Faster Processing** - Skip irrelevant MCU blocks entirely
+- **Perfect for Embedded** - Ideal for displays, cropping, thumbnails, region analysis
+- **Smart Block Processing** - Automatically determines which 8×8 blocks intersect your target rectangle
+
+#### API Usage
+```c
+// Define target rectangle (pixel coordinates)
+JRECT target_rect = {
+    .left = 100,   .top = 50,
+    .right = 200,  .bottom = 150
+};
+
+// Decode only the specified rectangle
+JRESULT res = jd_decomp_rect(&jdec, output_func, &target_rect);
+```
+
+#### Use Cases
+- **GUI Widgets** - Decode only visible screen regions
+- **Image Cropping** - Extract specific areas without full decode
+- **Streaming Displays** - Process image sections as needed
+- **Memory-Constrained Systems** - Decode large images in small chunks
 
 ### Extended Color Support
 Supports 7 output color formats:
@@ -60,8 +89,9 @@ make clean all
 ./test.sh
 ```
 
-### 3. Basic Usage Example
+### 3. Basic Usage Examples
 
+#### Full Image Decoding
 ```c
 #include "src/tjpgd.h"
 
@@ -75,8 +105,20 @@ JRESULT res = jd_prepare(&jdec, input_func, work, sizeof(work), &device);
 // Set output color format
 jd_set_color(&jdec, JD_RGB888);
 
-// Decompress image
+// Decompress entire image
 res = jd_decomp(&jdec, output_func, 0);
+```
+
+#### Targeted Rectangle Decoding (Recommended)
+```c
+// Define target rectangle (e.g., for a 128x64 LCD display region)
+JRECT target_rect = {
+    .left = 50,    .top = 100,     // Start position
+    .right = 178,  .bottom = 164   // End position (128x64 region)
+};
+
+// Decode only the specified rectangle - saves memory and time!
+res = jd_decomp_rect(&jdec, output_func, &target_rect);
 ```
 
 ## Configuration
@@ -114,16 +156,19 @@ typedef enum {
 
 ## Development Roadmap
 
-### High Priority
-- [ ] Image boundary clipping
+### High Priority (Rectangular Decoding Focus)
+- [ ] **Rectangle boundary clipping** - Ensure decoded regions stay within actual image bounds
+- [ ] **Optimized rectangle intersection** - Faster MCU block filtering for target rectangles
+- [ ] **Rectangle validation** - Input parameter checking and error handling
 - [ ] Make `JD_FASTDECODE = 2` functional
 - [ ] More descriptive error codes
-- [ ] Memory usage optimization
 
 ### Future Enhancements
+- [ ] **Multi-rectangle decoding** - Decode multiple regions in single pass
+- [ ] **Rectangle streaming** - Process large images in sequential rectangular chunks
 - [ ] ARM/RISC-V specific optimizations
 - [ ] Random access JPEG decoding
-- [ ] Performance benchmarking suite
+- [ ] Performance benchmarking suite (especially for rectangular decoding)
 - [ ] Advanced MCU sampling support
 - [ ] Progressive JPEG support
 
