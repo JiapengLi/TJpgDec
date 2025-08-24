@@ -1033,7 +1033,6 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
     uint32_t dreg = 0;
     int ebits, dcac;
     uint8_t bits_threshold = 15, n_y, n_cmp;
-    int block_id = 0, mcu_id = 0, total_mcus;
     int x = 0, y = 0;
     bool next_huff = true;
 
@@ -1050,8 +1049,6 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
     }
 
     memset(mcubuf + 1, 0, 63 * sizeof(jd_yuv_t));
-
-    total_mcus = (jd->width + 8 * jd->msx - 1) / (8 * jd->msx) * ((jd->height + 8 * jd->msy - 1) / (8 * jd->msy));
 
     jd->outfunc = outfunc;
 
@@ -1106,8 +1103,8 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
             if (next_huff) {
                 cls = !!cnt;
 
-                JD_LOG("mcu %u/%u (x: %d, y: %d), cmp %u, block %u, %s table, cls %d, cnt %d, dreg %08X, dbit %u",
-                       mcu_id, total_mcus, x, y, cmp, block_id, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
+                JD_LOG("(x: %d, y: %d), cmp %u, %s table, cls %d, cnt %d, dreg %08X, dbit %u",
+                       x, y, cmp, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
 
                 bl0 = jd_get_hc(&component->huff[cls], dreg, dbit, &val);
                 if (!bl0) {
@@ -1179,9 +1176,10 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
                     JD_INTDUMP(mcubuf, 64);
                     JD_LOG("");
 
-                    block_id++;
                     cmp++;
                     if (cmp >= n_cmp) {
+                        cmp = 0;
+
                         jd_output(jd, jd->mcubuf, n_cmp, x, y);
 
                         x += jd->msx << 3;
@@ -1189,15 +1187,9 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
                             x = 0;
                             y += jd->msy << 3;
                             if (y >= jd->height) {
+                                JD_LOG("All MCUs processed (%u padding bits: %X)", dbit, dreg >> (32 - dbit));
                                 return JDR_OK;
                             }
-                        }
-
-                        cmp = 0;
-                        mcu_id++;
-                        if (mcu_id >= total_mcus) {
-                            JD_LOG("All MCUs processed (%u padding bits: %X)", dbit, dreg >> (32 - dbit));
-                            return JDR_OK;
                         }
                     }
                     component = &jd->component[cmp];
