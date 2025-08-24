@@ -10,10 +10,11 @@
     - support very small cache jd->inbuf (minimum several bytes, bufferless)
 - Scale feature removed
 - Very fast single pixel extraction (skip dequantization, idct and color conversion if block is irrelevant)
+- Add more color formats (Grayscale, RGB565, BGR565, RGB888, BGR888, RGBA8888, BGRA8888)
 
 ### Limitations
 
-- Strict 8x8 block output, even in 16x16 MCU mode
+- Strict 8x8 block output, even in 16x16 or 16x8 MCU mode
 
 
 ## TODO
@@ -21,16 +22,15 @@
 - to support none x8 images
 - fast extract one pixel or one block
 - optimize for ARM or RISC-V architectures
-- memory optimize
+- memory optimization
 - random access to jpeg file?
+- More readable error code
 
 ## Build
 
-
 ```
-make
+make clean all
 ```
-
 
 ## Auto Format
 

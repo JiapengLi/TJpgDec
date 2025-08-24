@@ -79,7 +79,7 @@ typedef struct {
 typedef struct JDEC JDEC;
 typedef int32_t (*jd_infunc_t)(JDEC *, uint8_t *, int32_t);
 typedef int (*jd_outfunc_t)(JDEC *, void *, JRECT *);
-typedef void (*jd_yuv_scan_t)(JDEC *);
+typedef void (*jd_yuv_scan_t)(JDEC *, uint16_t x, uint16_t y);
 typedef void (*jd_yuv_fmt_t)(uint8_t **pix, int yy, int cb, int cr);
 
 typedef struct JTABLE {

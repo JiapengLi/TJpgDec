@@ -563,11 +563,13 @@ static const jd_yuv_fmt_t jd_yuv_fmt_tab[] = {
     yuv_to_bgra8888,
 };
 
-void yuv444_scan(JDEC *jd)
+void yuv444_scan(JDEC *jd, uint16_t x, uint16_t y)
 {
     uint8_t *pix = (uint8_t *)jd->workbuf;
     jd_yuv_t *py, *pcb, *pcr;
     int yy, cb, cr;
+
+    JRECT rect;
 
     /* In YUV444, each pixel has its own Y, Cb, Cr values */
     py  = jd->mcubuf;        // Y block start
@@ -584,13 +586,20 @@ void yuv444_scan(JDEC *jd)
         }
     }
 
+    /* output */
+    rect.left = x;
+    rect.top = y;
+    rect.right = rect.left + 8 - 1;
+    rect.bottom = rect.top + 8 - 1;
+    jd->outfunc(jd, jd->workbuf, &rect);
+
     JD_LOG("RGB888 (YUV444):");
     pix = (uint8_t *)jd->workbuf;
     JD_RGBDUMP(pix, 3 * 64);
 }
 
 
-void yuv422_scan(JDEC *jd)
+void yuv422_scan(JDEC *jd, uint16_t x, uint16_t y)
 {
     int iy, ix, icmp;
     jd_yuv_t *py, *pcb, *pcr;
@@ -598,6 +607,8 @@ void yuv422_scan(JDEC *jd)
 
     int y_block_col, y_block_row;
     int yy, cb, cr;
+
+    JRECT rect;
 
     // 4 blocks: Y1, Y2, Cb, Cr → 16x8 Y region
     pcb = jd->mcubuf + 64 * 2;   // Cb block starts after Y1 + Y2
@@ -628,17 +639,25 @@ void yuv422_scan(JDEC *jd)
             }
         }
 
+        rect.left = x + y_block_col;
+        rect.top = y + y_block_row;
+        rect.right = rect.left + 8 - 1;
+        rect.bottom = rect.top + 8 - 1;
+        jd->outfunc(jd, jd->workbuf, &rect);
+
         JD_LOG("RGB888 (YUV422):");
         pix = (uint8_t *)jd->workbuf;
         JD_RGBDUMP(pix, 3 * 64);
     }
 }
 
-void yuv400_scan(JDEC *jd)
+void yuv400_scan(JDEC *jd, uint16_t x, uint16_t y)
 {
     uint8_t *pix;
     jd_yuv_t *py;
     int yy, cb = 0, cr = 0;
+
+    JRECT rect;
 
     /* Build a RGB MCU from discrete comopnents */
     pix = (uint8_t *)jd->workbuf;
@@ -650,12 +669,18 @@ void yuv400_scan(JDEC *jd)
         }
     }
 
+    rect.left = x;
+    rect.top = y;
+    rect.right = rect.left + 8 - 1;
+    rect.bottom = rect.top + 8 - 1;
+    jd->outfunc(jd, jd->workbuf, &rect);
+
     JD_LOG("RGB888:");
     pix = (uint8_t *)jd->workbuf;
     JD_RGBDUMP(pix, 3 * 64);
 }
 
-void yuv420_scan(JDEC *jd)
+void yuv420_scan(JDEC *jd, uint16_t x, uint16_t y)
 {
     int iy, ix, icmp;
     jd_yuv_t *py, *pcb, *pcr;
@@ -663,6 +688,8 @@ void yuv420_scan(JDEC *jd)
 
     int y_block_col, y_block_row;
     int yy, cb, cr;
+
+    JRECT rect;
 
     // 6 blocks: Y1,Y2,Y3,Y4,Cb,Cr
     pcb = jd->mcubuf + 64 * 4;     // Cb block起点
@@ -690,13 +717,19 @@ void yuv420_scan(JDEC *jd)
             }
         }
 
+        rect.left = x + y_block_col;
+        rect.top = y + y_block_row;
+        rect.right = rect.left + 8 - 1;
+        rect.bottom = rect.top + 8 - 1;
+        jd->outfunc(jd, jd->workbuf, &rect);
+
         JD_LOG("RGB888:");
         pix = (uint8_t *)jd->workbuf;
         JD_RGBDUMP(pix, 3 * 64);
     }
 }
 
-JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
+JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp, uint16_t x, uint16_t y)
 {
     int cmp, i;
     JCOMP *component;
@@ -724,8 +757,8 @@ JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
         JD_INTDUMP(p, 64);
     }
 
-    /* scan && output */
-    jd->yuv_scan(jd);
+    /* scan & output */
+    jd->yuv_scan(jd, x, y);
 
     return JDR_OK;
 }
@@ -734,9 +767,9 @@ JRESULT jd_output(JDEC *jd, jd_yuv_t *mcubuf, uint8_t n_cmp)
 // API
 JRESULT jd_prepare(
     JDEC *jd,               /* Blank decompressor object */
-    int32_t (*infunc)(JDEC *, uint8_t *, int32_t), /* JPEG strem input function */
+    jd_infunc_t infunc,     /* JPEG strem input function */
     void *pool,             /* Working buffer for the decompression session */
-    int32_t sz_pool,         /* Size of working buffer */
+    int32_t sz_pool,        /* Size of working buffer */
     void *dev               /* I/O device identifier for the session */
 )
 {
@@ -1001,6 +1034,7 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
     int ebits, dcac;
     uint8_t bits_threshold = 15, n_y, n_cmp;
     int block_id = 0, mcu_id = 0, total_mcus;
+    int x = 0, y = 0;
     bool next_huff = true;
 
     JCOMP *component = &jd->component[cmp];
@@ -1072,8 +1106,8 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
             if (next_huff) {
                 cls = !!cnt;
 
-                JD_LOG("mcu %u/%u, cmp %u, block %u, %s table, cls %d, cnt %d, dreg %08X, dbit %u",
-                       mcu_id, total_mcus, cmp, block_id, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
+                JD_LOG("mcu %u/%u (x: %d, y: %d), cmp %u, block %u, %s table, cls %d, cnt %d, dreg %08X, dbit %u",
+                       mcu_id, total_mcus, x, y, cmp, block_id, cls == 0 ? "DC" : "AC", cls, cnt, dreg, dbit);
 
                 bl0 = jd_get_hc(&component->huff[cls], dreg, dbit, &val);
                 if (!bl0) {
@@ -1148,8 +1182,16 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
                     block_id++;
                     cmp++;
                     if (cmp >= n_cmp) {
+                        jd_output(jd, jd->mcubuf, n_cmp, x, y);
 
-                        jd_output(jd, jd->mcubuf, n_cmp);
+                        x += jd->msx << 3;
+                        if (x >= jd->width) {
+                            x = 0;
+                            y += jd->msy << 3;
+                            if (y >= jd->height) {
+                                return JDR_OK;
+                            }
+                        }
 
                         cmp = 0;
                         mcu_id++;
