@@ -1037,7 +1037,7 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
     bool next_huff = true;
 
     JCOMP *component = &jd->component[cmp];
-    jd_yuv_t *mcubuf = &jd->mcubuf[cmp * 64];
+    jd_yuv_t *mcubuf = &jd->mcubuf[cmp << 6];   // cmp * 64
 
     n_y = jd->msy * jd->msx; /* Number of Y blocks in the MCU */
     if (jd->ncomp == 1) {
@@ -1193,7 +1193,7 @@ JRESULT jd_decomp(JDEC *jd, jd_outfunc_t outfunc, uint8_t scale)
                         }
                     }
                     component = &jd->component[cmp];
-                    mcubuf = &jd->mcubuf[cmp * 64];
+                    mcubuf = &jd->mcubuf[cmp << 6];     // cmp * 64
 
                     memset(mcubuf + 1, 0, 63 * sizeof(jd_yuv_t));
                 }
