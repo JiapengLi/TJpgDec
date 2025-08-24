@@ -141,7 +141,8 @@ static inline uint8_t ycbcr2b(int Y, int Cb, int Cr)
 
 #define LDB_WORD(ptr)       (uint16_t)(((uint16_t)*((uint8_t*)(ptr))<<8)|(uint16_t)*(uint8_t*)((ptr)+1))
 
-static inline bool is_rect_intersect(const JRECT *r1, const JRECT *r2) {
+static inline bool is_rect_intersect(const JRECT *r1, const JRECT *r2)
+{
     if (r1->right < r2->left || r2->right < r1->left) {
         return false;
     }

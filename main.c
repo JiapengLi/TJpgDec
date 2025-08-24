@@ -27,36 +27,36 @@ int output_func(JDEC *jd, void *bitmap, JRECT *rect)
 
     int x, y, l;
 
-    switch(jd->color) {
-        case JD_GRAYSCALE:
-        default:
-            // Handle grayscale output
-            l = 1;
-            break;
-        case JD_RGB565:
-            // Handle RGB565 output
-            l = 2;
-            break;
-        case JD_BGR565:
-            // Handle BGR565 output
-            l = 2;
-            break;
-        case JD_RGB888:
-            // Handle RGB888 output
-            l = 3;
-            break;
-        case JD_BGR888:
-            // Handle BGR888 output
-            l = 3;
-            break;
-        case JD_RGBA8888:
-            // Handle RGBA8888 output
-            l = 4;
-            break;
-        case JD_BGRA8888:
-            // Handle BGRA8888 output
-            l = 4;
-            break;
+    switch (jd->color) {
+    case JD_GRAYSCALE:
+    default:
+        // Handle grayscale output
+        l = 1;
+        break;
+    case JD_RGB565:
+        // Handle RGB565 output
+        l = 2;
+        break;
+    case JD_BGR565:
+        // Handle BGR565 output
+        l = 2;
+        break;
+    case JD_RGB888:
+        // Handle RGB888 output
+        l = 3;
+        break;
+    case JD_BGR888:
+        // Handle BGR888 output
+        l = 3;
+        break;
+    case JD_RGBA8888:
+        // Handle RGBA8888 output
+        l = 4;
+        break;
+    case JD_BGRA8888:
+        // Handle BGRA8888 output
+        l = 4;
+        break;
     }
     printf("(%d,%d)-(%d,%d)\n", rect->left, rect->top, rect->right, rect->bottom);
     for (y = rect->top; y <= rect->bottom; y++) {
@@ -74,7 +74,7 @@ int output_func(JDEC *jd, void *bitmap, JRECT *rect)
             } else {
                 int n = l;
                 printf("(");
-                while(n-- > 1) {
+                while (n-- > 1) {
                     printf("%3d,", *pix++);
                 }
                 printf("%3d", *pix++);
