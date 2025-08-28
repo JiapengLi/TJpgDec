@@ -11,7 +11,9 @@ extern "C" {
 #include "tjpgdcnf.h"
 #include <string.h>
 
-#if defined(_WIN32)	/* VC++ or some compiler without stdint.h */
+#ifdef __GNUC__
+#include <stdint.h>
+#elif defined(_WIN32)	/* VC++ or some compiler without stdint.h */
 typedef unsigned char	uint8_t;
 typedef unsigned short	uint16_t;
 typedef short			int16_t;
@@ -31,7 +33,7 @@ typedef uint8_t jd_yuv_t;
 /* Error code */
 typedef enum {
 	JDR_OK = 0,	/* 0: Succeeded */
-	JDR_INTR,	/* 1: Interrupted by output function */	
+	JDR_INTR,	/* 1: Interrupted by output function */
 	JDR_INP,	/* 2: Device error or wrong termination of input stream */
 	JDR_MEM1,	/* 3: Insufficient memory pool for the image */
 	JDR_MEM2,	/* 4: Insufficient stream input buffer */
