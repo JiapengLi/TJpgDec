@@ -12,7 +12,9 @@
 /  2: Grayscale (8-bit/pix)
 */
 
-#define	JD_USE_SCALE	1
+#ifndef JD_USE_SCALE
+#   define	JD_USE_SCALE	1
+#endif
 /* Switches output descaling feature.
 /  0: Disable
 /  1: Enable
@@ -24,10 +26,59 @@
 /  1: Enable
 */
 
-#define JD_FASTDECODE	0
+#ifndef JD_FASTDECODE
+#   define JD_FASTDECODE	0
+#endif
 /* Optimization level
 /  0: Basic optimization. Suitable for 8/16-bit MCUs.
 /  1: + 32-bit barrel shifter. Suitable for 32-bit MCUs.
 /  2: + Table conversion for huffman decoding (wants 6 << HUFF_BIT bytes of RAM)
 */
 
+#ifndef JD_DEBUG
+#   define JD_DEBUG        0
+#endif
+
+#if JD_DEBUG
+#   include <stdio.h>
+#   ifndef JD_LOG
+#       define JD_LOG(x...)                 do { \
+            printf(x); printf("\n"); \
+        } while(0)
+#   endif
+
+#   ifndef JD_HEXDUMP
+#       define JD_HEXDUMP(x, y)             do { \
+            for (int i = 0; i < y; i++) { \
+                if (i && i % 16 == 0) printf("\n"); \
+                printf("%02X ", ((uint8_t*)x)[i]); \
+            } \
+            printf("\n"); \
+        } while(0)
+#   endif
+
+#   ifndef JD_INTDUMP
+#       define JD_INTDUMP(x, y)             do { \
+            for (int i = 0; i < y; i++) { \
+                if (i && i % 8 == 0) printf("\n"); \
+                printf("%5d ", x[i]); \
+            } \
+            printf("\n"); \
+        } while(0)
+#endif
+
+#   ifndef JD_RGBDUMP
+#       define JD_RGBDUMP(x, y)             do { \
+            for (int i = 0; i < y / 3; i++) { \
+                if (i && i % 8 == 0) printf("\n"); \
+                printf("(%3d,%3d,%3d) ", x[i * 3], x[i * 3 + 1], x[i * 3 + 2]); \
+            } \
+            printf("\n"); \
+        } while(0)
+#   endif
+#else
+#define JD_LOG(x...)                do {} while(0)
+#define JD_HEXDUMP(x, y)            do {} while(0)
+#define JD_INTDUMP(x, y)            do {} while(0)
+#define JD_RGBDUMP(x, y)            do {} while(0)
+#endif

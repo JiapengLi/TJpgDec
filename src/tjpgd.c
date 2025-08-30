@@ -721,9 +721,11 @@ static JRESULT mcu_load (
 
 		} else {							/* Load Y/C blocks from input stream */
 			id = cmp ? 1 : 0;						/* Huffman table ID of this component */
+			JD_LOG("blk %u cmp %u", blk, cmp);
 
 			/* Extract a DC element from input stream */
 			d = huffext(jd, id, 0);					/* Extract a huffman coded data (bit length) */
+			JD_LOG("cls 0 val %02X", d);
 			if (d < 0) return (JRESULT)(0 - d);		/* Err: invalid code or input */
 			bc = (unsigned int)d;
 			d = jd->dcv[cmp];						/* DC value of previous block */
@@ -743,6 +745,7 @@ static JRESULT mcu_load (
 			z = 1;		/* Top of the AC elements (in zigzag-order) */
 			do {
 				d = huffext(jd, id, 1);				/* Extract a huffman coded value (zero runs and bit length) */
+				JD_LOG("cls 1 val %02X", d);
 				if (d == 0) break;					/* EOB? */
 				if (d < 0) return (JRESULT)(0 - d);	/* Err: invalid code or input error */
 				bc = (unsigned int)d;
@@ -770,6 +773,8 @@ static JRESULT mcu_load (
 					block_idct(tmp, bp);	/* Apply IDCT and store the block to the MCU buffer */
 				}
 			}
+
+			JD_INTDUMP(bp, 64);
 		}
 
 		bp += 64;				/* Next block */
@@ -946,7 +951,7 @@ static JRESULT mcu_output (
 	}
 
 	/* Output the rectangular */
-	return outfunc(jd, jd->workbuf, &rect) ? JDR_OK : JDR_INTR; 
+	return outfunc(jd, jd->workbuf, &rect) ? JDR_OK : JDR_INTR;
 }
 
 
@@ -1142,6 +1147,7 @@ JRESULT jd_decomp (
 				if (rc != JDR_OK) return rc;
 				rst = 1;
 			}
+			JD_LOG("\nMCU %u,%u", x, y);
 			rc = mcu_load(jd);					/* Load an MCU (decompress huffman coded stream, dequantize and apply IDCT) */
 			if (rc != JDR_OK) return rc;
 			rc = mcu_output(jd, outfunc, x, y);	/* Output the MCU (YCbCr to RGB, scaling and output) */
